@@ -1,0 +1,23 @@
+force no
+N 
+Nsu 
+d 
+shlL 
+nPlusSites 
+nMinusSites 
+nZeroSites 
+plusCharge 
+minusCharge 
+types 
+inshlopt 
+L 
+bc 
+J 
+Q 
+kT 
+beta 
+beta_eff 
+sigma 
+coulCutoff 
+fftOn 
+e_cut 
