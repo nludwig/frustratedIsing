@@ -1,0 +1,26 @@
+force no
+N 512
+Nsu 0
+d 3
+shlL 1
+nPlusSvSites 256
+nMinusSvSites 256
+nZeroSvSites 0
+nPlusSuSites 0
+nMinusSuSites 0
+nHydrSuSites 0
+plusCharge 1.0
+minusCharge -1.0
+types 2
+inshlopt 0
+L 8 8 8
+bc 1 1 1 1 1 1
+J 1.0
+Q 0.5
+kT 
+beta 0
+beta_eff 0
+sigma 1.0
+coulCutoff 3.0
+fftOn 1
+e_cut 0

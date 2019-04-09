@@ -1,0 +1,30 @@
+force no
+N 512
+Nsu 1
+d 3
+shlL 1
+nPlusSvSites 255
+nMinusSvSites 256
+nZeroSvSites 0
+nPlusSuSites 1
+nMinusSuSites 0
+nHydrSuSites 0
+plusCharge 1.0
+minusCharge -1.0
+types 2
+inshlopt 0
+L 8 8 8
+bc 1 1 1 1 1 1
+J 1.0
+Q 0.5
+kT 
+beta 0
+beta_eff 0
+sigma 1.0
+coulCutoff 3.0
+fftOn 1
+e_cut 0
+
+Solutes
+0 rect,1,1,1 1 0 0 0 1 0 0 0 1 1 0.0 0.0 0.0 2.0 0 1 1.0 1.0 f
+End Solutes
