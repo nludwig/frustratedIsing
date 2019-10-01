@@ -90,7 +90,7 @@ void initPara(para p) {
         p->Q=0.0;
         p->kT=0.0;
         p->beta=0.0;
-        p->beta_eff=0.0;
+        p->betaEff_clst=0.0;
         p->sigma=0.0;
         p->coulCutoff=0.0;
         p->e_cut=0.0;
@@ -311,7 +311,7 @@ para copyPara(para p) {
 //        double Q;
 //        double kT;
 //        double beta;
-//        double beta_eff;
+//        double betaEff_clst;
 //        double sigma;
 //        double coulCutoff;
 //        double e_cut;
@@ -322,7 +322,7 @@ para copyPara(para p) {
         pNew->Q=p->Q;
         pNew->kT=p->kT;
         pNew->beta=p->beta;
-        pNew->beta_eff=p->beta_eff;
+        pNew->betaEff_clst=p->betaEff_clst;
         pNew->sigma=p->sigma;
         pNew->coulCutoff=p->coulCutoff;
         pNew->e_cut=p->e_cut;

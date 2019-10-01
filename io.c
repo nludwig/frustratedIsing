@@ -34,16 +34,16 @@ void dumpParameters(para p, su s, umb u, int coreNum, FILE* f, FILE* myerr) {
         fprintf(f,"bc ");
         for(int e=0;e<d;++e) fprintf(f,"%d %d ",bc[2*e],bc[2*e+1]);
         fprintf(f,"\n");
-        fprintf(f,"J %f\n"                                                            \
-                  "Q %f\n"                                                             \
-                  "kT %f\n"                                                             \
-                  "beta %f\n"                                                            \
-                  "beta_eff %f\n"                                                         \
-                  "sigma %f\n"                                                             \
-                  "coulCutoff %f\n"                                                         \
-                  "fftOn %d\n"                                                               \
-                  "e_cut %f\n"                                                                \
-                  ,p->J,p->Q,p->kT,p->beta,p->beta_eff,p->sigma,p->coulCutoff,p->fftOn,p->e_cut);
+        fprintf(f,"J %f\n"                                                                \
+                  "Q %f\n"                                                                 \
+                  "kT %f\n"                                                                 \
+                  "beta %f\n"                                                                \
+                  "betaEff_clst %f\n"                                                         \
+                  "sigma %f\n"                                                                 \
+                  "coulCutoff %f\n"                                                             \
+                  "fftOn %d\n"                                                                   \
+                  "e_cut %f\n"                                                                    \
+                  ,p->J,p->Q,p->kT,p->beta,p->betaEff_clst,p->sigma,p->coulCutoff,p->fftOn,p->e_cut);
         if(Nsu>0)   dumpSu(s,f);
         if(u!=NULL) dumpUmbrellas(u,s,p,f,myerr);
         fflush(f);
@@ -109,7 +109,7 @@ int* readSetParameters(para p, char**** linesByType, int coreNum, FILE* f, FILE*
                 else if( strcmp(words[0],"Q")==0 )                 p->Q=atof(words[1]);
                 else if( strcmp(words[0],"kT")==0 )                p->kT=atof(words[1]);
                 else if( strcmp(words[0],"beta")==0 && force==1 )  p->beta=atof(words[1]);
-                else if( strcmp(words[0],"beta_eff")==0 )          p->beta_eff=atof(words[1]);
+                else if( strcmp(words[0],"betaEff_clst")==0 )      p->betaEff_clst=atof(words[1]);
                 else if( strcmp(words[0],"sigma")==0 )             p->sigma=atof(words[1]);
                 else if( strcmp(words[0],"coulCutoff")==0 )        p->coulCutoff=atof(words[1]);
                 else if( strcmp(words[0],"fftOn")==0 )             p->fftOn=atoi(words[1]);
@@ -134,9 +134,9 @@ int* readSetParameters(para p, char**** linesByType, int coreNum, FILE* f, FILE*
 
         //calculable parameters (0.0 input -> calculate based on other given):
         if(p->beta==0.0 || force==0)    p->beta=1.0/(p->kT);
-        if(p->beta_eff==0.0 || force==0) {
-                if(p->kT<=5.0) p->beta_eff=1.0/5.0;     //hardcode from G&V 2001
-                else           p->beta_eff=1.0/(p->kT); //T_eff ~5kT
+        if(p->betaEff_clst==0.0 || force==0) {
+                if(p->kT<=5.0) p->betaEff_clst=1.0/5.0;     //hardcode from G&V 2001
+                else           p->betaEff_clst=1.0/(p->kT); //T_eff ~5kT
         }
 
         extern double pi;

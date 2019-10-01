@@ -1302,7 +1302,7 @@ int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double* ewald,
 // To avoid excessive numbers of operations to build clusters,
 // we build by adding NNs, rather than all neighbors. Walk
 // through NNs of seeds in random order; if roll p in [0,1)
-// less than 1-exp(-4*beta_eff*J), add the considered NNs to
+// less than 1-exp(-4*betaEff_clst*J), add the considered NNs to
 // each cluster & to the stack. Once all possible additions
 // are attempted for a given seed, move to the next seed
 // pair in the stack. Once clusters are built, we need to
@@ -1310,8 +1310,8 @@ int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double* ewald,
 // the move. Because of the exotic nature of this cluster
 // move, the probability of acceptance is:
 //
-// 1            if      (\deltaE_1^{ji}+(1-\beta_eff/\beta)*\deltaE_0^{ji})<0
-// exp(-\beta(\deltaE_1^{ji}+(1-\beta_eff/\beta)*\deltaE_0^{ji}))        else
+// 1            if      (\deltaE_1^{ji}+(1-\betaEff_clst/\beta)*\deltaE_0^{ji})<0
+// exp(-\beta(\deltaE_1^{ji}+(1-\betaEff_clst/\beta)*\deltaE_0^{ji}))        else
 //
 // where E_0 is the NN part of the Ising Hamiltonian, and
 // E_1 is the other part (here, the screened Coulomb part).
@@ -1400,7 +1400,7 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         //E: 0:ising svsv  1:ising svsu  2:ising susu  3:csr svsv  4:csr svsu  5: csr susu  6: clr ..
         for(int i=0;i<ENERGY_LENGTH;++i) deltaE[i]=Enew[i]-Eold[i];
         deltaE[1]+=E_IsuClustMvConstraint;
-        clusterE=(1.0-(p->kT)*(p->beta_eff))*deltaE[0];
+        clusterE=(1.0-(p->kT)*(p->betaEff_clst))*deltaE[0];
         for(int i=1;i<ENERGY_LENGTH;++i) clusterE+=deltaE[i];
 
         #if TEST_BUILD
@@ -1412,7 +1412,7 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         double fdeltaE[ENERGY_LENGTH];
         for(int i=0;i<ENERGY_LENGTH;++i) fdeltaE[i]=fEnew[i]-fEold[i];
         fdeltaE[1]+=E_IsuClustMvConstraint;
-        double fclusterE=(1.0-(p->kT)*(p->beta_eff))*fdeltaE[0];
+        double fclusterE=(1.0-(p->kT)*(p->betaEff_clst))*fdeltaE[0];
         for(int i=1;i<ENERGY_LENGTH;++i) fclusterE+=fdeltaE[i];
         if(fabs(fclusterE-clusterE) >= 0.00001) {
                 fprintf(myerr,"full clusterE,local,diff: %f,%f,%f\n",fclusterE,clusterE,fclusterE-clusterE);
@@ -1444,7 +1444,7 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         //check Boltz. prob
         const double pr=(double)pcg32_random_r(rng)/UINT32_MAX; // pr in [0,1)
         const double boltz=exp(-(p->beta) * clusterE);
-        //fprintf(myerr,"nInCluster: %d\t(beta-beta_eff)*deltaE_I: %f\tbeta*deltaE_C:%f\tbeta*clusterE: %f\tboltz: %f\tp: %f\n",(nInCluster),(p->beta-p->beta_eff)*deltaE_I,(p->beta)*deltaE_C,(p->beta)*clusterE,boltz,pr);
+        //fprintf(myerr,"nInCluster: %d\t(beta-betaEff_clst)*deltaE_I: %f\tbeta*deltaE_C:%f\tbeta*clusterE: %f\tboltz: %f\tp: %f\n",(nInCluster),(p->beta-p->betaEff_clst)*deltaE_I,(p->beta)*deltaE_C,(p->beta)*clusterE,boltz,pr);
         if(pr<=boltz) { //accepted
                 for(int i=0;i<N;++i) *c[i].val=*tc[i].val;
                 if(E!=NULL) {
@@ -1487,7 +1487,7 @@ uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, cons
         for(int i=0;i<N;++i) inCluster[i]=UINT32_MAX; //init for safety
                 
         #if COUL_ON //for FI
-        const double boltz=1.0-exp(-4.0*(p->beta_eff)*(p->J));
+        const double boltz=1.0-exp(-4.0*(p->betaEff_clst)*(p->J));
         #endif
         #if !COUL_ON //for pure I
         const double boltz=1.0-exp(-4.0*(p->beta)*(p->J));
