@@ -49,6 +49,3 @@ void wrapIntoL_double(double* pos, int* L_in);
 double dist_intvect_nopbc(int* vector0, int* vector1);
 double dist_vect(double* vector0, double* vector1);
 double dist_lat(int part_i, int part_j);
-bool isClose_nearZero(double a, double b);
-bool isClose_notNearZero(double a, double b);
-bool isClose(double a, double b, double relTol, double absTol);

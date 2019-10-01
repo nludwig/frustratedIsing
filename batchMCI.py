@@ -178,7 +178,7 @@ def findRecentDep(cmd,grepstrings,col=0,disqual=None,ret='N'):
 
 class JobLauncher:
   def __init__(self,N,Nsu,name,var,varkeys,paraTemplate,umbrK,rotation,
-                    lStr,sigma,ewaldIn,enFreq,dumpFreq,dataFreq,
+                    lStr,sigma,enFreq,dumpFreq,dataFreq,
                     suComFreq,umbrFreq,eSteps,pSteps,neutralOverall):
     self.N=N
     self.Nsu=Nsu
@@ -190,7 +190,6 @@ class JobLauncher:
     self.rotation=rotation
     self.lStr=lStr
     self.sigma=sigma
-    self.ewaldIn=ewaldIn
     self.enFreq=enFreq
     self.dumpFreq=dumpFreq
     self.dataFreq=dataFreq
@@ -380,7 +379,6 @@ class JobLauncher:
 
   #lines,jobN,pfixi,rnList,execInParentDir,rotation,data,N,lStr,sigma,ewaldIn,sweepsMult,kTeff,enFreq,dumpFreq,dataFreq,suComFreq,umbrFreq,eSteps,pSteps,neutralOverall
   def makeSbatch(self,lines,jobN,ospfixi,rnList,execInParentDir,data,wpfixi,sweepsMult,kTeff,umbrR=None):
-    ewaldIn='../'+self.ewaldIn if execInParentDir is True else self.ewaldIn
     #prep
     rnStr=''
     for rn in rnList:
@@ -448,7 +446,7 @@ class JobLauncher:
           l=lines[i]
         print('{}'.format(l),file=f)
   
-      cmd='./MCIsingFIv28_icc_sa 1 0 {} {} {} {} {:.4f} {} {} {} {} {} {} {} {} {} {} {} {} {} {}'.format(self.neutralOverall,self.rotation,self.N,self.lStr,self.sigma,self.ewaldIn,paraVal,dataVal,sweepsMult,kTeff,self.enFreq,self.dumpFreq,self.dataFreq,self.suComFreq,self.umbrFreq,self.eSteps,self.pSteps,rnStr,lammpsVal)
+      cmd='./MCIsingFIv28_icc_sa 1 0 {} {} {} {:.4f} {} {} {} {} {} {} {} {} {} {} {} {} {} {}'.format(self.neutralOverall,self.rotation,self.N,self.lStr,self.sigma,paraVal,dataVal,sweepsMult,kTeff,self.enFreq,self.dumpFreq,self.dataFreq,self.suComFreq,self.umbrFreq,self.eSteps,self.pSteps,rnStr,lammpsVal)
       if execInParentDir is True:
         cmd='.'+cmd
       print('{}'.format(cmd),file=f)
@@ -526,8 +524,8 @@ class JobLauncher:
 
 def main():
   err=sys.stderr
-  nargs=26
-  arg=getArgs(nargs,'batchMCI.py jobNameOrNone dataInOrNone l0,l1,l2 sigma ewaldInOrNone sweepsMultOS0,1,..(or0.0) kTeffOS0,1,..(or0.0) neutralOverall?(0/1) rotation template.para template.sbatch jobNStart jobIterations jobMax maxCpuPerNode var0Nm,var00,var01,..:var1Nm,var10,var11,..:.. umbrK(orNone) umbrR0,1,...(orNone) enFreq dumpFreq dataFreq suComFreq umbrFreq equiStep prodSteps')
+  nargs=25
+  arg=getArgs(nargs,'batchMCI.py jobNameOrNone dataInOrNone l0,l1,l2 sigma sweepsMultOS0,1,..(or0.0) kTeffOS0,1,..(or0.0) neutralOverall?(0/1) rotation template.para template.sbatch jobNStart jobIterations jobMax maxCpuPerNode var0Nm,var00,var01,..:var1Nm,var10,var11,..:.. umbrK(orNone) umbrR0,1,...(orNone) enFreq dumpFreq dataFreq suComFreq umbrFreq equiStep prodSteps')
   
   name=next(arg)
   if name.lower()=='none': name=None
@@ -536,9 +534,6 @@ def main():
   #N=int(next(arg))
   lStr=next(arg)
   sigma=float(next(arg))
-  ewaldIn=next(arg)
-  if ewaldIn.lower()=='none':
-    ewaldIn='none'
   sweepsMult=[float(i) for i in next(arg).split(sep=',')]
   kTeff=[float(i) for i in next(arg).split(sep=',')]
   neutralOverall=next(arg)
@@ -580,9 +575,8 @@ def main():
 
   if umbrR is not None:
     paraIn='../'+paraIn
-    ewaldIn='../'+ewaldIn
   jl=JobLauncher(N,Nsu,name,var,varkeys,paraIn,umbrK,
-                 rotation,lStr,sigma,ewaldIn,enFreq,dumpFreq,
+                 rotation,lStr,sigma,enFreq,dumpFreq,
                  dataFreq,suComFreq,umbrFreq,eSteps,pSteps,neutralOverall)
 
   rngTable=RngSeedTable()

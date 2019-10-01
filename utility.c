@@ -441,25 +441,3 @@ double dist_lat(int i, int j) {
         const double r=dist_vect(ud,vd);
         return r;
 }
-
-bool isClose_nearZero(double a, double b) {
-        const double relTol=1e-9;
-        const double absTol=1e-8;
-        return isClose(a,b,relTol,absTol);
-}
-
-bool isClose_notNearZero(double a, double b) {
-        const double relTol=1e-9;
-        const double absTol=0.0;
-        return isClose(a,b,relTol,absTol);
-}
-
-bool isClose(double a, double b, double relTol, double absTol) {
-        const double aa=fabs(a);
-        const double ab=fabs(b);
-        const double mab=aa>ab ? aa : ab;
-        const double rhs=relTol*mab>absTol ? relTol*mab : absTol;
-        const double aamb=abs(a-b);
-        if(aamb<=rhs) return true;
-        else          return false;
-}
