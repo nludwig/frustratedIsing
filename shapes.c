@@ -6,7 +6,7 @@ int** buildCube(int l) {
         for(int e=0;e<d;++e) nsites*=l;
         int** sites=malloc(nsites*sizeof(*sites));
         int* points=malloc(nsites*d*sizeof(*points));
-        assert(sites!=NULL || points!=NULL /*malloc*/);
+        assert(sites!=NULL && points!=NULL /*malloc*/);
         for(int i=0;i<nsites;++i) sites[i]=points+d*i;
         int i=0;
         for(int x=0;x<l;++x) { //row major
@@ -53,21 +53,20 @@ int* getShapeInterface(int** shape, int nsites, int* ninterface, int** Lcube, in
         assert(nnList!=NULL && cmpList!=NULL /*malloc*/);
         int j=0;
         for(int i=0;i<nsites;++i) {
-                cmpList[i]=getSite(shape[i],*Lcube);
+                cmpList[i]=getWrappedSite(shape[i],*Lcube);
                 for(int e=0;e<d;++e) {
                         shape[i][e]-=1; //'-1' neigh.s
-                        nnList[j++]=getSite(shape[i],*Lcube);
+                        nnList[j++]=getWrappedSite(shape[i],*Lcube);
                         shape[i][e]+=1;
 
                         shape[i][e]+=1; //'+1' neigh.s
-                        nnList[j++]=getSite(shape[i],*Lcube);
+                        nnList[j++]=getWrappedSite(shape[i],*Lcube);
                         shape[i][e]-=1;
                 }
         }
         qsort(nnList,nNN,sizeof(int),(int (*)(const void*,const void*))iCmp);
         const int nCubeShapePlusInterface=uniqueint(&nnList,nNN);
-        *ninterface=diff(nnList,nCubeShapePlusInterface,cmpList,nsites);
-        //fprintf(myerr,"getShapeInterface: *ninterface: %d\n",*ninterface);
+        *ninterface=diff(&nnList,nCubeShapePlusInterface,&cmpList,nsites);
         return nnList;
 }
 
@@ -80,16 +79,17 @@ int getSA(int** shape, int nsites, int** Lcube, int* border) {
 
 int** getShapeInterfacePos(int** shape, int nsites, int* ninterface, int** Lcube, int* border) {
         int* interface=getShapeInterface(shape,nsites,ninterface,Lcube,border);
-        //fprintf(myerr,"getShapeInterfacePos: *ninterface: %d\n",*ninterface);
         extern int d;
         int** interShape=malloc(*ninterface*sizeof(*interShape));
         int* interShapePos=malloc(*ninterface*d*sizeof(*interShapePos));
         assert(interShape!=NULL && interShapePos!=NULL /*malloc*/);
         for(int i=0;i<*ninterface;++i) {
                 interShape[i]=interShapePos+i*d;
-                getPos(interface[i],interShape[i],*Lcube);
+                getPos(interface[i],interShape[i]);
         }
-        free(interface);
+        if(*ninterface>0) {
+                free(interface);
+        }
         return interShape;
 }
 
@@ -183,26 +183,32 @@ int** buildNeighCube(double Rc) {
 //1) a,b sorted
 //2) a,b unique (no repeats w/in a or w/in b)
 //3) la>=lb; more specfically, la contains lb
-int diff(int* a, int la, int* b, int lb) {
+int diff(int** a, int la, int** b, int lb) {
         assert(la>=lb /*diff assump violated*/);
         int i=0,j=0;
         while(i<la && lb>0) {
                 while(j<lb) {
-                        if(a[i]==b[j]) {
+                        if((*a)[i]==(*b)[j]) {
                                 --la;
                                 --lb;
-                                for(int k=i;k<la;++k) a[k]=a[k+1];
-                                for(int k=j;k<lb;++k) b[k]=b[k+1];
+                                for(int k=i;k<la;++k) (*a)[k]=(*a)[k+1];
+                                for(int k=j;k<lb;++k) (*b)[k]=(*b)[k+1];
                         }
                         else ++j;
                 }
                 ++i;
                 j=0;
         }
-        free(b); b=NULL;
-        a=realloc(a,la*sizeof(*a));
-        assert(a!=NULL /*realloc*/);
-        return la;
+        free(*b); *b=NULL;
+        if(la==0) {
+                free(*a); *a=NULL;
+                return 0;
+        }
+        else {
+                *a=realloc(*a,la*sizeof(*a));
+                assert(*a!=NULL /*realloc*/);
+                return la;
+        }
 }
 
 double* matrixOnVector(double** M, double* v) {
@@ -272,29 +278,6 @@ double** copyMatrix(double** M, int d) {
         for(int i=0;i<d;++i) A[i]=Ah+i*d;
         copyMatrixInPlace(M,A,d);
         return A;
-}
-
-
-//hits v with d-dimensional rotation matrix
-//about axis e; designed for 3d, may be
-//general
-void rotatePiOvrTwoAbtE(double* v, int e) {
-        extern int d;
-        assert(e<d && e>=0);
-        double u[d];
-        for(int i=0;i<d;++i) u[i]=v[i];
-        for(int i=0;i<d;++i) {
-                if(i==e) continue;
-                for(int j=0;j<d;++j) {
-                        if(j==e || j==i) continue;
-                        int modi=i-e, modj=j-e;
-                        if(modi<0) modi+=d;
-                        if(modj<0) modj+=d;
-                        modi%=d;
-                        modj%=d;
-                        v[i]=u[j]*(modj-modi);
-                }
-        }
 }
 
 double*** buildPiO2RotationMatricies(int d) {

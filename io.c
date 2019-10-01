@@ -6,28 +6,29 @@
 
 /* Pairs with readSetParameters() output.
  */
-void dumpParameters(para p, su s, umb u, FILE* f, FILE* myerr) {
-        extern int N,Nsu,d,shlL,nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites,types,inshlopt;
+void dumpParameters(para p, su s, umb u, int coreNum, FILE* f, FILE* myerr) {
+        extern int N,Nsu,d,shlL,types,inshlopt;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
         extern double plusCharge,minusCharge;
         extern int* L;
         extern int* bc;
         fprintf(f,"force no\n"); //hardcode: calc. calc'able param.s rather than reading
-        fprintf(f,"N %d\n"                                                       \
-                  "Nsu %d\n"                                                      \
-                  "d %d\n"                                                         \
-                  "shlL %d\n"                                                       \
-                  "nPlusSvSites %d\n"                                                \
-                  "nMinusSvSites %d\n"                                                \
-                  "nZeroSvSites %d\n"                                                  \
-                  "nPlusSuSites %d\n"                                                   \
-                  "nMinusSuSites %d\n"                                                   \
-                  "nHydrSuSites %d\n"                                                     \
-                  "plusCharge %f\n"                                                        \
-                  "minusCharge %f\n"                                                        \
-                  "types %d\n"                                                               \
-                  "inshlopt %d\n",                                                            \
-                  N,Nsu,d,shlL,nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,           \
-                                nMinusSuSites,nHydrSuSites,plusCharge,minusCharge,types,inshlopt);
+        fprintf(f,"N %d\n"                                                                                 \
+                  "Nsu %d\n"                                                                                \
+                  "d %d\n"                                                                                   \
+                  "shlL %d\n"                                                                                 \
+                  "nPlusSvSites %d\n"                                                                          \
+                  "nMinusSvSites %d\n"                                                                          \
+                  "nZeroSvSites %d\n"                                                                            \
+                  "nPlusSuSites %d\n"                                                                             \
+                  "nMinusSuSites %d\n"                                                                             \
+                  "nHydrSuSites %d\n"                                                                               \
+                  "plusCharge %f\n"                                                                                  \
+                  "minusCharge %f\n"                                                                                  \
+                  "types %d\n"                                                                                         \
+                  "inshlopt %d\n",                                                                                      \
+                  N,Nsu,d,shlL,nPlusSvSites[coreNum],nMinusSvSites[coreNum],nZeroSvSites[coreNum],                       \
+                  nPlusSuSites[coreNum],nMinusSuSites[coreNum],nHydrSuSites[coreNum],plusCharge,minusCharge,types,inshlopt);
         fprintf(f,"L ");
         for(int e=0;e<d;++e) fprintf(f,"%d ",L[e]);
         fprintf(f,"\n");
@@ -44,7 +45,7 @@ void dumpParameters(para p, su s, umb u, FILE* f, FILE* myerr) {
                   "fftOn %d\n"                                                               \
                   "e_cut %f\n"                                                                \
                   ,p->J,p->Q,p->kT,p->beta,p->beta_eff,p->sigma,p->coulCutoff,p->fftOn,p->e_cut);
-        if(Nsu>0)   dumpSolutes(s,f);
+        if(Nsu>0)   dumpSu(s,f);
         if(u!=NULL) dumpUmbrellas(u,s,p,f,myerr);
         fflush(f);
 }
@@ -52,8 +53,9 @@ void dumpParameters(para p, su s, umb u, FILE* f, FILE* myerr) {
 //Pairs with dumpParameters() output (or can be written
 //by hand).
 //!!REQUIRES d COMES BEFORE L,bc!!
-int* readSetParameters(para p, char**** linesByType, FILE* f, FILE* myerr) {
-        extern int N,Nsu,d,shlL,nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites,types,inshlopt;
+int* readSetParameters(para p, char**** linesByType, int coreNum, FILE* f, FILE* myerr) {
+        extern int N,Nsu,d,shlL,types,inshlopt;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
         extern double plusCharge,minusCharge;
         extern int* L;
         extern int* bc;
@@ -69,8 +71,8 @@ int* readSetParameters(para p, char**** linesByType, FILE* f, FILE* myerr) {
         }
 
         int i=0;
-        const int lbuf=1024;
-        char buf[1024];
+        const int lbuf=32768;
+        char buf[lbuf];
         memset(buf,'\0',lbuf);
         char** words=NULL;
         int nwords[1]={0};
@@ -86,17 +88,14 @@ int* readSetParameters(para p, char**** linesByType, FILE* f, FILE* myerr) {
                 else if( strcmp(words[0],"Nsu")==0 ) Nsu=atoi(words[1]);
                 else if( strcmp(words[0],"d")==0 ) {
                         d=atoi(words[1]);
-                        //L=malloc(d*sizeof(*L));
-                        //bc=malloc(2*d*sizeof(*bc));
-                        //assert(L!=NULL || bc!=NULL /*malloc*/);
                 }
                 else if( strcmp(words[0],"shlL")==0 )          shlL=atoi(words[1]);
-                else if( strcmp(words[0],"nPlusSvSites")==0 )  nPlusSvSites=atoi(words[1]);
-                else if( strcmp(words[0],"nMinusSvSites")==0 ) nMinusSvSites=atoi(words[1]);
-                else if( strcmp(words[0],"nZeroSvSites")==0 )  nZeroSvSites=atoi(words[1]);
-                else if( strcmp(words[0],"nPlusSuSites")==0 )  nPlusSuSites=atoi(words[1]);
-                else if( strcmp(words[0],"nMinusSuSites")==0 ) nMinusSuSites=atoi(words[1]);
-                else if( strcmp(words[0],"nHydrSuSites")==0 )  nHydrSuSites=atoi(words[1]);
+                else if( strcmp(words[0],"nPlusSvSites")==0 )  nPlusSvSites[coreNum]=atoi(words[1]);
+                else if( strcmp(words[0],"nMinusSvSites")==0 ) nMinusSvSites[coreNum]=atoi(words[1]);
+                else if( strcmp(words[0],"nZeroSvSites")==0 )  nZeroSvSites[coreNum]=atoi(words[1]);
+                else if( strcmp(words[0],"nPlusSuSites")==0 )  nPlusSuSites[coreNum]=atoi(words[1]);
+                else if( strcmp(words[0],"nMinusSuSites")==0 ) nMinusSuSites[coreNum]=atoi(words[1]);
+                else if( strcmp(words[0],"nHydrSuSites")==0 )  nHydrSuSites[coreNum]=atoi(words[1]);
                 else if( strcmp(words[0],"plusCharge")==0 )    plusCharge=atof(words[1]);
                 else if( strcmp(words[0],"minusCharge")==0 )   minusCharge=atof(words[1]);
                 else if( strcmp(words[0],"types")==0 )         types=atoi(words[1]);
@@ -155,7 +154,6 @@ int* readSetParameters(para p, char**** linesByType, FILE* f, FILE* myerr) {
         p->e_self=0.0;
         #endif
         fprintf(myerr,"readSetParameters: done. e_self: %f\n",p->e_self);
-        //fprintf(myerr,"readSetParameters: N,Q,e_cut,pi,sigma,coulCut:%d,%f,%f,%f,%f,%f\n",N,p->Q,p->e_cut,pi,p->sigma,p->coulCutoff);
 
         return nLinesByType;
 }
@@ -201,18 +199,18 @@ void dumpData(lattice c, su s, FILE* f) {
         for(int i=0;i<N;++i) {
                 fprintf(f,"%d\t%d\t",i,(int)lround(*c[i].val));
                 int pos[d];
-                getPos(i,pos,NULL);
+                getPos(i,pos);
                 for(int e=0;e<d;++e) fprintf(f,"%d\t",pos[e]);
                 fprintf(f,"%d\n",c[i].su);
         }
-        if(Nsu>0) dumpSolutes(s,f);
+        if(Nsu>0) dumpSu(s,f);
         fflush(f);
 }
 
 /* Read data from .data file output by dumpData() into memory.
  */
 int readData(char*** lines, FILE* f) {
-        const int lbuf=1024;
+        const int lbuf=32768;
         char* buf=malloc(lbuf);
         assert(buf!=NULL /*malloc*/);
         memset(buf,'\0',lbuf);
@@ -226,8 +224,8 @@ int readData(char*** lines, FILE* f) {
         fseekret=fseek(f,0,SEEK_SET);
         assert(fseekret==0);
         *lines=malloc(nlines*sizeof(**lines));
-        char* linesStore=malloc(totchars);
-        assert(*lines!=NULL || linesStore!=NULL /*malloc*/);
+        char* linesStore=malloc(totchars*sizeof(*linesStore));
+        assert(*lines!=NULL && linesStore!=NULL /*malloc*/);
         int i=0,l=0,tmp=0;
         *(*lines)=linesStore;
         **(*lines)='\0';
@@ -239,7 +237,6 @@ int readData(char*** lines, FILE* f) {
                 strncat((*lines)[i],buf,tmp);
                 l+=tmp;
                 i+=1;
-                //memset(buf,'\0',strlen(buf)); //paranoid
         }
         free(buf);
         return nlines;
@@ -253,7 +250,7 @@ void dumpSuCom(su s, int i, FILE* f) {
 void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, double** unwrappedComH,          \
                  double** orientationHH, double*** orientationH, double** suRelPos, double*** suRelPosPtrs,       \
                  double** shlRelPos, double*** shlRelPosPtrs, lattice** suCurPos, lattice** shlCurPos, bool** hydrH, FILE* myerr) {
-        const int maxShapeLett=10;       //"rectangle" + "\0"
+        const int maxShapeLett=10; //"rectangle" + "\0"
         extern int Nsu,d;
         assert(nlines>0 && lines!=NULL /*passed empty lines*/);
         assert(strcmp(lines[0],"Solutes")==0 /*incorrect first line*/);
@@ -286,7 +283,7 @@ void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, 
                 char** typeAndSize=split(words[++j], ",", &numTypeAndSize);
                 strcpy((*sNH),typeAndSize[0]);
                 (*ts)[i].shape = (*s)[i].shape = (*sNH);
-                (*sNH)+=strlen(typeAndSize[0])+1;
+                *sNH+=strlen(*sNH)+1;
                 if(strcmp((*s)[i].shape,"cube")==0) {
                         int* linDimHolder=malloc(1*sizeof(*linDimHolder));
                         assert(linDimHolder!=NULL /*malloc*/);
@@ -325,16 +322,74 @@ void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, 
                         for(int e=0;e<d;++e) border[e]=shlL;
                         int** interfacePos=getShapeInterfacePos(rect,(*s)[i].nsites,&ninterface,&Lcube,border);
                         if((*s)[i].ninshl!=ninterface) {
-                                //fprintf(myerr,"loadSu: s[%d].ninshl:%d  !=  ninterface:%d. setting val to ninterface\n",i,(*s)[i].ninshl,ninterface);
                                 (*s)[i].ninshl=ninterface;
                                 (*ts)[i].ninshl=ninterface;
                         }
                         free(Lcube);
                         free(*rect); free(rect);
+                        if(ninterface>0) {
+                                free(*interfacePos);
+                                free(interfacePos);
+                        }
+                }
+                else if(strcmp((*s)[i].shape,"sphere")==0 || strcmp((*s)[i].shape,"sph")==0) {
+                        int* linDimHolder=malloc(1*sizeof(*linDimHolder));
+                        assert(linDimHolder!=NULL /*malloc*/);
+                        *linDimHolder=atoi(typeAndSize[1]);
+                        (*ts)[i].linDim = (*s)[i].linDim = linDimHolder;
+                        //find number of cells in sphere
+                        int nSph=0;
+                        const int lCube=2*(*s)[i].linDim[0];
+                        int** cube=buildCube(lCube);
+                        const int nCube=lCube*lCube*lCube;
+                        const double R2=(*s)[i].linDim[0]*(*s)[i].linDim[0];
+                        for(int j=0;j<nCube;++j) {
+                                double dist2=0.0;
+                                for(int e=0;e<d;++e) {
+                                        const double re=cube[j][e]-(lCube-1)/2.0;
+                                        dist2+=re*re;
+                                }
+                                if(dist2<=R2) ++nSph;
+                        }
+                        //build relPos's of sphere
+                        int* sphereHold=malloc(nSph*d*sizeof(*sphereHold));
+                        int** sphere=malloc(nSph*sizeof(*sphere));
+                        assert(sphereHold!=NULL && sphere!=NULL /*malloc*/);
+                        for(int j=0;j<nSph;++j) sphere[j]=sphereHold+j*d;
+                        int k=0;
+                        for(int j=0;j<nCube;++j) {
+                                double dist2=0.0;
+                                for(int e=0;e<d;++e) {
+                                        const double re=cube[j][e]-(lCube-1)/2.0;
+                                        dist2+=re*re;
+                                }
+                                if(dist2<=R2) {
+                                        for(int e=0;e<d;++e) {
+                                                sphere[k][e]=cube[j][e];
+                                        }
+                                        ++k;
+                                }
+                        }
+                        //build interface of sphere
+                        int* Lcube=NULL;
+                        int border[d];
+                        int ninterface;
+                        for(int e=0;e<d;++e) border[e]=shlL;
+                        int** interfacePos=getShapeInterfacePos(sphere,nSph,&ninterface,&Lcube,border);
+
+                        (*s)[i].nsites=nSph;
+                        (*s)[i].ninshl=ninterface;
+                        (*ts)[i].nsites=(*s)[i].nsites;
+                        (*ts)[i].ninshl=(*s)[i].ninshl;
+                        free(Lcube);
+                        free(*cube); free(cube);
                         free(*interfacePos); free(interfacePos);
                 }
                 else {
-                        fprintf(myerr,"shape not yet implemented. try cube or rect\n");
+                        fprintf(myerr,"shape '%s' not yet implemented. try cube, rect, or sphere. i:%d\n",(*s)[i].shape,i);
+                        //fprintf(myerr,"%d\n",strcmp((*s)[i].shape,"rect")==0);
+                        //fprintf(myerr,"%d\n",strcmp((*s)[i].shape,"rectangle")==0 || strcmp((*s)[i].shape,"rect")==0);
+                        //fprintf(myerr,"%s\n",typeAndSize[0]);
                         exit(1);
                 }
 
@@ -345,8 +400,6 @@ void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, 
                         (*orientationH)[e+i*d+Nsu*d]=(*orientationHH)+(e+i*d+Nsu*d)*d;
                         for(int k=0;k<d;++k) {
                                 (*ts)[i].orientation[e][k]=(*s)[i].orientation[e][k]=atof(words[++j]);
-                                //==
-                                //(*orientationHH)[k+e*d+i*d*d+Nsu*d*d]=(*orientationHH)[k+e*d+i*d*d]=atof(words[++j]);
                         }
                 }
 
@@ -371,9 +424,20 @@ void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, 
                 char* hydrString=malloc(((*s)[i].nsites+1)*sizeof(*hydrString));
                 assert(hydrString!=NULL);
                 ++j;
-                for(int ii=0;ii<(*s)[i].nsites;++ii) hydrString[ii]=words[j][ii];
-                hydrString[(*s)[i].nsites]='\0';
-                hydrStrings[i]=hydrString;
+                //capital F -> none hydrophobic/organic
+                char pfix[2];
+                pfix[0]=words[j][0];
+                pfix[1]='\0';
+                if(strcmp(pfix,"F")==0) {
+                        for(int ii=0;ii<(*s)[i].nsites;++ii) hydrString[ii]='f';
+                        hydrString[(*s)[i].nsites]='\0';
+                        hydrStrings[i]=hydrString;
+                }
+                else {
+                        for(int ii=0;ii<(*s)[i].nsites;++ii) hydrString[ii]=words[j][ii];
+                        hydrString[(*s)[i].nsites]='\0';
+                        hydrStrings[i]=hydrString;
+                }
                 
                 free(*words);  free(words);   words=NULL;
                 free(*typeAndSize);     free(typeAndSize);
@@ -458,13 +522,15 @@ void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, 
         free(hydrStrings);
 }
 
-void dumpSolutes(su s, FILE* f) {
+void dumpSu(su s, FILE* f) {
         extern int Nsu,d;
         fprintf(f,"\nSolutes\n");
         for(int i=0;i<Nsu;++i) {
                 fprintf(f,"%d %s",i,s[i].shape);
-                assert(strcmp(s[i].shape,"sphere")!=0 && strcmp(s[i].shape,"custom")!=0 /*tb implemented*/);
-                if(strcmp(s[i].shape,"cube")==0) fprintf(f,",%d ",s[i].linDim[0]);
+                //assert(strcmp(s[i].shape,"sphere")!=0 && strcmp(s[i].shape,"custom")!=0 /*tb implemented*/);
+                if(strcmp(s[i].shape,"cube")==0) {
+                        fprintf(f,",%d ",s[i].linDim[0]);
+                }
                 else if(strcmp(s[i].shape,"rectangle")==0 || strcmp(s[i].shape,"rect")==0) {
                         for(int e=0;e<d;++e) fprintf(f,",%d",s[i].linDim[e]);
                         fprintf(f," ");
@@ -474,9 +540,20 @@ void dumpSolutes(su s, FILE* f) {
                                 }
                         }
                 }
-                else exit(1); //didn't recognize su type
+                else if(strcmp(s[i].shape,"sphere")==0 || strcmp(s[i].shape,"sph")==0) {
+                        fprintf(f,",%d ",s[i].linDim[0]);
+                        for(int e=0;e<d;++e) {
+                                for(int j=0;j<d;++j) {
+                                        fprintf(f,"%d ",(int)s[i].orientation[e][j]);
+                                }
+                        }
+                }
+                else {
+                        fprintf(stderr,"dumpSu: didn't recognize su type '%s'. exiting\n",s[i].shape);
+                        exit(1);
+                }
 
-                fprintf(f,"%d ",(int)lround(s[i].surfType));
+                fprintf(f,"%f ",s[i].surfType);
                 dumpSuCom(s,i,f);
                 fprintf(f,"%f %d %d %f %f ", \
                         s[i].suStep,           \
@@ -540,7 +617,6 @@ void loadUmbrellas(char** lines, int nlines, umb u, su s, para p, FILE* myumbout
                 free(*words);   free(words);    words=NULL;
         }
         //setup header for myumbout
-        //extern FILE* myumbout;
         if(myumbout!=NULL) {
                 fprintf(myumbout,"#umbN\tsuA<->suB\tk\tr0");
                 for(int i=0;i<(u->npairs);++i) {
@@ -578,7 +654,7 @@ void dumpUmbrellas(umb u, su s, para p, FILE* f, FILE* myerr) {
 //test using this function in place of readData
 int readLinesSimple(char*** lines, FILE* f, FILE* myerr) {
         assert(f!=NULL);
-        const int lbuf=1024;
+        const int lbuf=32768;
         char buf[lbuf];
         memset(buf,'\0',lbuf);
         int nlines=0, totchars=0;
@@ -650,7 +726,7 @@ int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f
                 return (j-i);
         }
         else if(f!=NULL) { //read from f
-                const int lbuf=1024;
+                const int lbuf=32768;
                 char buf[lbuf];
                 int fseekret;
                 memset(buf,'\0',lbuf);
@@ -718,13 +794,14 @@ int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f
  * to same as solvent-solvent interaction, see pg.13
  * in NBL Lab Notebook 1608- .
  */
-void dumpLammps(lattice c, su s, int ts, FILE* f, FILE* myerr) {
-        extern int N,d,Nsu,nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        int ctminus=0,ctplus=nMinusSvSites,ctzero=nMinusSvSites+nPlusSvSites;
+void dumpLammps(lattice c, su s, int ts, int coreNum, FILE* f, FILE* myerr) {
+        extern int N,d,Nsu;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
+        int ctminus=0,ctplus=nMinusSvSites[coreNum],ctzero=nMinusSvSites[coreNum]+nPlusSvSites[coreNum];
         int ctsu[Nsu];
         int tmp=0;
         for(int i=0;i<Nsu;++i) {
-                ctsu[i]=nPlusSvSites+nMinusSvSites+nZeroSvSites+tmp;
+                ctsu[i]=nPlusSvSites[coreNum]+nMinusSvSites[coreNum]+nZeroSvSites[coreNum]+tmp;
                 tmp+=s[i].nsites;
         }
 
@@ -757,19 +834,20 @@ void dumpLammps(lattice c, su s, int ts, FILE* f, FILE* myerr) {
                 else if(*c[i].val==0.0)  fprintf(f,"%d 2 ",ctzero++);
                 else                     fprintf(myerr,"dumpLammps: got unexpected val: %f\n",*c[i].val);
                 int pos[d];
-                getPos(i,pos,NULL);
+                getPos(i,pos);
                 for(int e=0;e<d;++e) fprintf(f,"%d ",pos[e]);
                 if(d==2) fprintf(f,"0 "); // make 2D plane in 3D so VMD can visualize in LAMMPS format
                 fprintf(f,"\n");
         }
-        if(ctminus!=nMinusSvSites || ctplus!=nMinusSvSites+nPlusSvSites || ctzero!=nMinusSvSites+nPlusSvSites+nZeroSvSites) {
+        if(ctminus!=nMinusSvSites[coreNum] || ctplus!=nMinusSvSites[coreNum]+nPlusSvSites[coreNum] || ctzero!=nMinusSvSites[coreNum]+nPlusSvSites[coreNum]+nZeroSvSites[coreNum]) {
                 fprintf(myerr,"dumpLammps: ts %d final ct.s\n\texpected\tactual\n"
-                              "zero\t%d\t\t%d\nplus\t%d\t\t%d\nminus\t%d\t\t%d\n"
-                              ,ts,nMinusSvSites+nPlusSvSites+nZeroSvSites,ctzero,nMinusSvSites+nPlusSvSites,ctplus,nMinusSvSites,ctminus);
+                              "zero\t%d\t\t%d\nplus\t%d\t\t%d\nminus\t%d\t\t%d\n",
+                              ts,nMinusSvSites[coreNum]+nPlusSvSites[coreNum]+nZeroSvSites[coreNum],
+                              ctzero,nMinusSvSites[coreNum]+nPlusSvSites[coreNum],ctplus,nMinusSvSites[coreNum],ctminus);
                 tmp=0;
                 for(int i=0;i<Nsu;++i) {
                         tmp+=s[i].nsites;
-                        fprintf(myerr,"su[%d]\t%d\t\t%d\t\t(type:%d)\n",i,N-nPlusSvSites-nMinusSvSites-nZeroSvSites+tmp,ctsu[i],(int)lround(s[i].surfType));
+                        fprintf(myerr,"su[%d]\t%d\t\t%d\t\t(type:%d)\n",i,N-nPlusSvSites[coreNum]-nMinusSvSites[coreNum]-nZeroSvSites[coreNum]+tmp,ctsu[i],(int)lround(s[i].surfType));
                 }
         }
 }
@@ -794,7 +872,7 @@ void dumpLammps(lattice c, su s, int ts, FILE* f, FILE* myerr) {
 //file extensions to be canonically
 //called .fitrj
 void dumpFI(lattice c, su s, int ts, FILE* f, FILE* myerr) {
-        extern int N,d,Nsu,nPlusSvSites,nMinusSvSites,nZeroSvSites,nHydrSuSites;
+        extern int N,d,Nsu;
         extern int* L;
         extern int* bc;
         //LAMMPS style header
@@ -825,85 +903,34 @@ void dumpFI(lattice c, su s, int ts, FILE* f, FILE* myerr) {
                 else                       fprintf(myerr,"dumpLammps: got unexpected val: %f\n",*c[i].val);
                 fprintf(f,"%d ",c[i].su);
                 int pos[d];
-                getPos(i,pos,NULL);
+                getPos(i,pos);
                 for(int e=0;e<d;++e) fprintf(f,"%d ",pos[e]);
                 if(d==2) fprintf(f,"0 "); // make 2D plane in 3D so VMD can visualize in LAMMPS format
                 fprintf(f,"\n");
         }
-        //if(ctminus!=nMinusSvSites || ctplus!=nMinusSvSites+nPlusSvSites || ctzero!=nMinusSvSites+nPlusSvSites+nZeroSvSites || \
-        //   cthydr!=nMinusSvSites+nPlusSvSites+nZeroSvSites+nHydrSuSites) {
-        //        fprintf(myerr,"dumpLammps: ts %d final ct.s\n\texpected\tactual\n"
-        //                      "hydr\t%d\t\t%d\nzero\t%d\t\t%d\nplus\t%d\t\t%d\nminus\t%d\t\t%d\n",
-        //                      ts,nMinusSvSites+nPlusSvSites+nZeroSvSites+nHydrSuSites,cthydr,\
-        //                      nMinusSvSites+nPlusSvSites+nZeroSvSites,ctzero,nMinusSvSites+nPlusSvSites,ctplus,nMinusSvSites,ctminus);
-        //}
 }
 
-void dumpSk(fftw_complex* ffto, FILE* f)
-{
-        extern int* L;
-        int i=0;
-        for(int x=0;x<L[0];++x) {
-                for(int y=0;y<L[1];++y) {
-                        for(int z=0;z<L[2]/2+1;++z) {
-                                fprintf(f,"%d\t%d\t%d\t%f\t%f\n",x,y,z,creal(ffto[i]),cimag(ffto[i]));
-                                ++i;
-                        }
-                }
+void loadEwald(double** ewald, int N, char** lines, int nlines) {
+        *ewald=malloc(N*sizeof(**ewald));
+        assert(*ewald!=NULL /*malloc*/);
+        for(int i=0;i<N;++i) {
+                (*ewald)[i]=atof(lines[i]);
         }
-        fprintf(f,"\n");
-}
-
-void dumpEwald(double** ewald, int* L, FILE* f) {
-        const int d=3;
-        assert(d==3);
-        const int N=L[0]*L[1]*L[2];
-        for(int i=0;i<N-1;++i) {
-                for(int j=i+1;j<N;++j) {
-                        const int jmi=j-i-1;
-                        fprintf(f,"%f\n",ewald[i][jmi]);
-                }
-        }
-        fprintf(f,"%f\n",ewald[N-1][0]);
-}
-
-void loadEwald(double*** ewald, int N, char** lines, int nlines) {
-        double* ewaldHolder=malloc(((size_t)N*((size_t)N-(size_t)1)/(size_t)2+(size_t)1)*sizeof(*ewaldHolder)); //avoid wrapping if N large
-        *ewald=malloc(((N-1)+1)*sizeof(**ewald));
-        assert(ewaldHolder!=NULL && *ewald!=NULL /*malloc*/);
-        int i=0;
-        for(int j=0;j<N-1;++j) {
-                (*ewald)[j]=ewaldHolder+i;
-                for(int k=j+1;k<N;++k) {
-                        const int kmj=k-j-1;
-                        (*ewald)[j][kmj]=atof(lines[i]);
-                        ++i;
-                }
-        }
-        (*ewald)[N-1]=ewaldHolder+i;
-        (*ewald)[N-1][0]=atof(lines[i]);
 }
 
 //read in from f in chunks
 //works better than loadEwald()
 //when f is very big
-void loadEwaldChunks(double*** ewald, int N, FILE* f) {
+void loadEwaldChunks(double** ewald, int N, FILE* f) {
         assert(f!=NULL);
-        double* ewaldHolder=malloc(((size_t)N*(size_t)(N-1)/2+(size_t)1)*sizeof(*ewaldHolder));
-        *ewald=malloc(((N-1)+1)*sizeof(**ewald));
-        assert(ewaldHolder!=NULL && *ewald!=NULL /*malloc*/);
-        unsigned long i=0;
-        for(unsigned long j=0;j<N-1;++j) {
-                (*ewald)[j]=ewaldHolder+i;
-                i+=N-j-1;
-        }
-        (*ewald)[N-1]=ewaldHolder+i;
+        *ewald=malloc(N*sizeof(**ewald));
+        assert(*ewald!=NULL /*malloc*/);
 
         const int chunksize=1024;
-        const int lbuf=1024;
+        const int lbuf=32768;
         char buf[lbuf];
         memset(buf,'\0',lbuf);
-        int nlines=0, totchars=0;
+        int nlines=0,totchars=0;
         while(fgets(buf,lbuf,f) != NULL) {        //find length of header sect.
                 const int l=strlen(buf);
                 totchars+=l;
@@ -916,7 +943,7 @@ void loadEwaldChunks(double*** ewald, int N, FILE* f) {
         assert(lines!=NULL && linesStore!=NULL /*malloc*/);
         unsigned long outeri=0;
         bool run=true;
-        while(run) {
+        while(run==true) {
                 linesStore[0]='\0'; //so first call of strncat() <-> strncpy()
                 int l=0,prevstrlen=-1;
                 int finalchunk;
@@ -934,18 +961,31 @@ void loadEwaldChunks(double*** ewald, int N, FILE* f) {
                         prevstrlen=tmp;
                         l+=tmp;
                 }
-                if(run) {
+                if(run==true) {
                         for(int i=0;i<chunksize;++i) {
-                                ewaldHolder[outeri]=atof(lines[i]);
-                                ++outeri;
+                                (*ewald)[outeri++]=atof(lines[i]);
                         }
                 }
                 else { //final
                         for(int i=0;i<finalchunk;++i) {
-                                ewaldHolder[outeri]=atof(lines[i]);
-                                ++outeri;
+                                (*ewald)[outeri++]=atof(lines[i]);
                         }
                 }
         }
         free(linesStore); free(lines);
+}
+
+void dumpEwald(double* ewald, int* L, FILE* f) {
+        fprintf(stderr,"dumpEwald: fn called\n");
+        fflush(stderr);
+        const int d=3;
+        assert(d==3);
+        const int N=L[0]*L[1]*L[2];
+        const int nDig=DBL_DECIMAL_DIG; //from float.h
+        for(int i=0;i<N;++i) {
+                fprintf(f,"%.*e\n",nDig,ewald[i]);
+        }
+        fprintf(stderr,"dumpEwald: post-loop\n");
+        fprintf(stderr,"dumpEwald: work done. exiting fn\n");
+        fflush(stderr);
 }

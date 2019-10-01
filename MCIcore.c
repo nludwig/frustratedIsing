@@ -4,11 +4,13 @@
 /******* solute (su) related ***/
 /*******************************/
 
-int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, pcg32_random_t* rng, FILE* myerr) {
+int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int Nsu,shlL,d;
         int comPH=0;
         int dct;
-        //setCharge(c);
+        //build relPos for each solute, update curPos
+        fprintf(myerr,"setSuRelPos: starting routine\n");
+        fflush(myerr);
         for(int i=0;i<Nsu;++i) {
                 if(strcmp(s[i].shape,"cube")==0) {
                         int** cube=buildCube(s[i].linDim[0]);
@@ -19,6 +21,7 @@ int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, pcg32_random_
                         int** interfacePos=getShapeInterfacePos(cube,s[i].nsites,&ninterface,&Lcube,border);
                         if(s[i].ninshl!=ninterface) {
                                 fprintf(myerr,"setSuRelPos: s[%d].ninshl:%d  !=  ninterface:%d. setting val to ninterface\n",i,s[i].ninshl,ninterface);
+                                fflush(myerr);
                                 s[i].ninshl=ninterface;
                         }
                         for(int j=0;j<s[i].nsites;++j) {
@@ -40,7 +43,6 @@ int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, pcg32_random_
                         int* Lcube=NULL;
                         int border[d];
                         int ninterface=0;
-                        //fprintf(myerr,"shlL: %d\n",shlL);
                         for(int e=0;e<d;++e) border[e]=shlL;
                         int** interfacePos=getShapeInterfacePos(rect,s[i].nsites,&ninterface,&Lcube,border);
                         if(s[i].ninshl!=ninterface) {
@@ -65,24 +67,108 @@ int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, pcg32_random_
                         }
                         fprintf(myerr,"interf x\ty\tz\t\t\n");
                         for(int j=0;j<s[i].ninshl;++j) {
-                                fprintf(myerr,"%d\t%d\t%d\t\t%.1f\t%.1f\t%.1f\n",interfacePos[j][0],interfacePos[j][1],interfacePos[j][2],interfacePos[j][0]-(s[i].linDim[0]-1)/2.0-border[0],interfacePos[j][1]-(s[i].linDim[1]-1)/2.0-border[1],interfacePos[j][2]-(s[i].linDim[2]-1)/2.0-border[2]);
+                                fprintf(myerr,"%d\t%d\t%d\t\t%.1f\t%.1f\t%.1f\n",
+                                interfacePos[j][0],interfacePos[j][1],interfacePos[j][2],
+                                interfacePos[j][0]-(s[i].linDim[0]-1)/2.0-border[0],
+                                interfacePos[j][1]-(s[i].linDim[1]-1)/2.0-border[1],
+                                interfacePos[j][2]-(s[i].linDim[2]-1)/2.0-border[2]);
                         }
                         #endif
                         free(Lcube);
                         free(*rect); free(rect);
+                        if(ninterface>0) {
+                                free(*interfacePos);
+                                free(interfacePos);
+                        }
+                }
+                else if(strcmp(s[i].shape,"sphere")==0 || strcmp(s[i].shape,"sph")==0) {
+                        //find number of cells in sphere
+                        int nSph=0;
+                        const int lCube=2*s[i].linDim[0];
+                        int** cube=buildCube(lCube);
+                        const int nCube=lCube*lCube*lCube;
+                        const double R2=s[i].linDim[0]*s[i].linDim[0];
+                        for(int j=0;j<nCube;++j) {
+                                double dist2=0.0;
+                                for(int e=0;e<d;++e) {
+                                        const double re=cube[j][e]-(lCube-1)/2.0;
+                                        dist2+=re*re;
+                                }
+                                if(dist2<=R2) ++nSph;
+                        }
+                        fprintf(myerr,"setSuRelPos nSph: %d\n",nSph);
+                        //build relPos's of sphere
+                        int* sphereHold=malloc(nSph*d*sizeof(*sphereHold));
+                        int** sphere=malloc(nSph*sizeof(*sphere));
+                        assert(sphereHold!=NULL && sphere!=NULL /*malloc*/);
+                        for(int j=0;j<nSph;++j) sphere[j]=sphereHold+j*d;
+                        int k=0;
+                        for(int j=0;j<nCube;++j) {
+                                double dist2=0.0;
+                                for(int e=0;e<d;++e) {
+                                        const double re=cube[j][e]-(lCube-1)/2.0;
+                                        dist2+=re*re;
+                                }
+                                if(dist2<=R2) {
+                                        for(int e=0;e<d;++e) {
+                                                sphere[k][e]=cube[j][e];
+                                                s[i].relPos[k][e]=cube[j][e]-(lCube-1)/2.0;
+                                        }
+                                        ++k;
+                                }
+                                if(k>=nSph) break;
+                        }
+                        //build interface of sphere
+                        int* Lcube=NULL;
+                        int border[d];
+                        int ninterface;
+                        for(int e=0;e<d;++e) border[e]=shlL;
+                        int** interfacePos=getShapeInterfacePos(sphere,s[i].nsites,&ninterface,&Lcube,border);
+                        if(s[i].ninshl!=ninterface) {
+                                fprintf(myerr,"setSuRelPos: s[%d].ninshl:%d  !=  ninterface:%d. setting val to ninterface\n",i,s[i].ninshl,ninterface);
+                                s[i].ninshl=ninterface;
+                        }
+                        for(int j=0;j<s[i].ninshl;++j) {
+                                for(int e=0;e<d;++e) {
+                                        s[i].inShlRelPos[j][e]=interfacePos[j][e]-(s[i].linDim[0]-1)/2.0;
+                                }
+                        }
+                        free(Lcube);
+                        free(*cube); free(cube);
                         free(*interfacePos); free(interfacePos);
                 }
                 else {
-                        fprintf(myerr,"shape not yet implemented. try cube or rect\n");
+                        fprintf(myerr,"shape '%s' not yet implemented. try cube, rect, or sphere\n",s[i].shape);
                         exit(1);
                 }
                 updSuCurPos(c,s,i,(double*)NULL);
         }
+        //update the lattice
         updLatSuStatus(c,s);
         updLatHydrophobicStatus(c,s);
+
+        //assume all su sites of same sign have same valence
+        for(int i=0;i<Nsu;++i) {
+                for(int j=i+1;j<Nsu;++j) {
+                        if((s[i].surfType>0.0 && s[j].surfType>0.0) ||
+                           (s[i].surfType<0.0 && s[j].surfType<0.0)) {
+                                assert(s[i].surfType==s[j].surfType);
+                        }
+                }
+        }
+        double suPlusCharge=0.0,suMinusCharge=0.0;
+        for(int i=0;i<Nsu;++i) {
+                if(s[i].surfType>0.0) {
+                        suPlusCharge=s[i].surfType;
+                }
+                else if(s[i].surfType<0.0) {
+                        suMinusCharge=s[i].surfType;
+                }
+                if(suPlusCharge!=0.0 && suMinusCharge!=0.0) break;
+        }
+        //update values of sites in su's
         extern double plusCharge,minusCharge;
-        for(int i=0;i<Nsu;++i) assert(plusCharge==s[i].surfType || minusCharge==s[i].surfType /*assume*/);
-        int delPlus=0,delMinus=0,delZero=0;
+        int delPlus=0,delMinus=0,delZero=0,delSuPlus=0,delSuMinus=0;
         for(int i=0;i<Nsu;++i) {
                 if(checkSuOverlap(s,i,inshlopt)==1) {
                         fprintf(myerr,"setSuRelPos: solutes with given COM, size overlap. Exiting.\n");
@@ -91,92 +177,108 @@ int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, pcg32_random_
                 for(int j=0;j<s[i].nsites;++j) {
                         const double origVal=*s[i].currPos[j]->val;
                         *s[i].currPos[j]->val=s[i].surfType;
-                        if(plusCharge==s[i].surfType) delPlus+=1; //for su
-                        else                          delMinus+=1; //for su
-                        if(origVal==plusCharge)       delPlus-=1;
-                        else if(origVal==minusCharge) delMinus-=1;
-                        else if(origVal==0.0)         delZero-=1;
+                        if(s[i].surfType==suPlusCharge) delSuPlus+=1; //for su
+                        else                            delSuMinus+=1; //for su
+                        if(origVal==plusCharge)         delPlus-=1;
+                        else if(origVal==minusCharge)   delMinus-=1;
+                        else if(origVal==0.0)           delZero-=1;
+                        else if(origVal==suPlusCharge)  delSuPlus-=1;
+                        else if(origVal==suMinusCharge) delSuMinus-=1;
                 }
-
         }
-        //extern int nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        //extern int nPlusSuSites,nMinusSuSites,nHydrSuSites;
-        //double* chg=checkCharge(c,-1,NULL);
-        //int delPlus=nPlusSvSites-chg[0];
-        //int delMinus=nMinusSvSites-chg[1];
-        //int delZero=nZeroSvSites-chg[2];
-        //free(chg);
+        const int ntypes=5;
+        int del[]={delPlus,delMinus,delZero,delSuPlus,delSuMinus};
+        double charges[]={plusCharge,minusCharge,0.0,suPlusCharge,suMinusCharge};
+        fprintf(myerr,"setSuRelPot: placing su.s lead to delPlus,delMinus,delZero,delSuPlus,delSuMinus: ");
+        for(int i=0;i<ntypes;++i) fprintf(myerr,"%d,",del[i]);
+        fprintf(myerr,"\n");
 
+        //neutralize the lattice if necessary
         extern int N;
+        int n[]={0,0,0,0,0};
+        for(int i=0;i<N;++i) {
+                for(int j=0;j<ntypes;++j) {
+                        if(*c[i].val==charges[j]) {
+                                n[j]+=1;
+                                break;
+                        }
+                }
+        }
+        fprintf(myerr,"setSuRelPot: nPlus,nMinus,nZero,nSuPlus,nSuMinus: ");
+        for(int i=0;i<ntypes;++i) fprintf(myerr,"%d,",n[i]);
+        fprintf(myerr,"\n");
         const uint32_t maxIter=10u*(uint32_t)ceil(N*(1.0+log(N)));
-        //setCharge(c); //for debugging
-        if(delZero<0) {
-                for(uint32_t i=0;i<maxIter;++i) {
-                        if(delZero==0) break;
-                        const uint32_t rand=pcg32_boundedrand_r(rng,N);
-                        if(c[rand].su!=-1 || c[rand].hydrophobic==true) continue;
-                        const double tempv=*c[rand].val;
-                        if(tempv==0.0)      continue;
-                        else if(tempv>0.0) delPlus-=1;
-                        else if(tempv<0.0) delMinus-=1;
-                        *c[rand].val=0.0;
-                        delZero+=1;
+        for(uint32_t i=0;i<maxIter;++i) {
+                bool endloop=true;
+                for(int j=0;j<ntypes;++j) {
+                        if(del[j]!=0) {
+                                endloop=false;
+                                break;
+                        }
+                }
+                if(endloop==true) {
+                        fprintf(myerr,"setSuRelPos neut loop received endloop==true. i: %u\n",i);
+                        break;
+                }
+                //use RNG index to remove pos. bias for refill
+                const uint32_t rand=pcg32_boundedrand_r(rng,N);
+                if(c[rand].su==-1 && c[rand].hydrophobic==false) {
+                        neutralizeStep(c,rand,del,charges,ntypes);
+                }
+                if(i==maxIter-1u) fprintf(myerr,"setSuRelPos reached last step in neut loop");
+        }
+        fprintf(myerr,"setSuRelPot: post neutralization delPlus,delMinus,delZero,delSuPlus,delSuMinus: ");
+        for(int i=0;i<ntypes;++i) fprintf(myerr,"%d,",del[i]);
+        fprintf(myerr,"\n");
+        for(int j=0;j<ntypes;++j) {
+                n[j]=0;
+        }
+        for(int i=0;i<N;++i) {
+                for(int j=0;j<ntypes;++j) {
+                        if(*c[i].val==charges[j]) {
+                                n[j]+=1;
+                                break;
+                        }
                 }
         }
-        if(delZero>0) {
-                for(uint32_t i=0;i<maxIter;++i) {
-                        if(delZero==0) break;
-                        const uint32_t rand=pcg32_boundedrand_r(rng,N);
-                        if(c[rand].su!=-1 || c[rand].hydrophobic==true) continue;
-                        if(*c[rand].val!=0.0) continue;
-                        if(delPlus<0) {
-                                *c[rand].val=plusCharge;
-                                delPlus+=1;
-                        }
-                        else if(delMinus<0) {
-                                *c[rand].val=minusCharge;
-                                delMinus+=1;
-                        }
-                        else { //choose + for su type -> this faster
-                                *c[rand].val=minusCharge;
-                                delMinus+=1;
-                        }
-                        delZero-=1;
+        fprintf(myerr,"setSuRelPot: nPlus,nMinus,nZero,nSuPlus,nSuMinus: ");
+        for(int i=0;i<ntypes;++i) fprintf(myerr,"%d,",n[i]);
+        fprintf(myerr,"\n");
+        setCharge(c,coreNum);
+        double ret=0.0;
+        for(int i=0;i<ntypes;++i) ret+=n[i]*charges[i];
+        //for(int i=0;i<ntypes;++i) ret+=del[i]*charges[i];
+        return (int)round(ret);
+}
+
+//each type goes to next in line
+//(ie. + -> -, - -> 0, ...)
+//rather than set order
+//(ie. +,-,0,..)
+//to further randomize IC
+//del = [delPlus,delMinus,delZero,delSuPlus,delSuMinus,..]
+//charges = [plusCharge,minusCharge,0.0,suPlusCharge,suMinusCharge]
+void neutralizeStep(lattice c, int rand, int* del, double* charges, int ntypes) {
+        const double v=*c[rand].val;
+        int type=-1;
+        for(int i=0;i<ntypes;++i) {
+                if(v==charges[i]) {
+                        type=i;
+                        break;
                 }
         }
-        assert(delZero==0 /*maintainChargeNeut()*/);
-        int delc=delPlus-delMinus;
-        //setCharge(c); //for debugging
-        if(delc!=0) {
-                const int fromInt = (delc>0) ? 1 : -1;
-                const int toInt=-1*fromInt;
-                const double from = (delc>0) ? plusCharge : minusCharge;
-                const double to = (delc>0) ? minusCharge : plusCharge;
-                int maxSwitches=0;
-                for(int k=0;k<N;++k) {
-                        if(*c[k].val==from) maxSwitches+=2*fromInt;
-                }
-                if(fromInt*maxSwitches > fromInt*delc) {
-                        for(uint32_t i=0;i<maxIter;++i) {
-                                if(delc==0) break;
-                                const uint32_t rand=pcg32_boundedrand_r(rng,N);   //roll a number [0,lc)
-                                if(c[rand].su!=-1 || c[rand].hydrophobic==true) continue;
-                                if(*c[rand].val==from) {    //use RNG index to remove pos. bias for refill
-                                        *c[rand].val=to;
-                                        delc+=2*toInt;
-                                }
+        assert(type!=-1);
+        if(del[type]>0) {
+                for(int i=1;i<ntypes;++i) {
+                        const int j=(type+i)%ntypes;
+                        if(del[j]<0) {
+                                *c[rand].val=charges[j];
+                                del[j]+=1;
+                                del[type]-=1;
+                                break;
                         }
                 }
-                else if(fromInt*maxSwitches < fromInt*delc) { //fromInt* will make sign +
-                        fprintf(myerr,"maintainChargeNeut: best case delc:%d (tnplus-nplus)\n",delc-maxSwitches);
-                        return -1;
-                }
-                else if(fromInt*maxSwitches == fromInt*delc) {
-                        for(int k=0;k<N;++k) *c[k].val=to;
-                }
         }
-        setCharge(c);
-        return delc;
 }
 
 /* take COM & rel. pos.s, and find
@@ -220,9 +322,7 @@ void updLatHydrophobicStatus(lattice c, su s) {
                 for(int j=0;j<s[i].nsites;++j) {
                         const bool hydr=s[i].hydrophobic[j];
                         if(hydr==true) {
-                                //const double type=s[i].surfType;
                                 s[i].currPos[j]->hydrophobic=hydr;
-                                //*s[i].currPos[j]->val=type;
                         }
                 }
         }
@@ -232,13 +332,6 @@ void updLatHydrophobicStatus(lattice c, su s) {
 void updSuCurPos_latSuStatus(lattice c, su s, int ind) {
         updSuCurPos(c,s,ind,(double*)NULL);
         updLatSuStatus(c,s);
-}
-
-/* wrapper for updSoluCurrPos,updLattSolStatus&updLatHydrophobicStatus */
-void updSuCurPos_latSuStatus_latHydrophobicStatus(lattice c, su s, int ind) {
-        updSuCurPos(c,s,ind,(double*)NULL);
-        updLatSuStatus(c,s);
-        updLatHydrophobicStatus(c,s);
 }
 
 bool setHydrophobicExist(su s) {
@@ -255,21 +348,12 @@ bool setHydrophobicExist(su s) {
                                 break;
                         }
                 }
+                if(ret==true) {
+                        break;
+                }
         }
         return ret;
 }
-
-//bool setHydrophobicExist(su s) {
-//        extern int Nsu;
-//        for(int i=0;i<Nsu;++i) {
-//                for(int j=0;j<s[i].nsites;++j) {
-//                        if(s[i].hydrophobic[j]==true) {
-//                                return true;
-//                        }
-//                }
-//        }
-//        return false;
-//}
 
 /* check solutes are non-overlapping with s[ind]; 
  * returns 0 if no overlap, 1 if overlap 
@@ -357,52 +441,6 @@ int checkSuOverlap(su s, int ind, int inshlopt) {
                 }
                 */
 
-///* findVacated: compare pos.s of s & ts on
-// * c. return sites which are in ts but not
-// * s (those which are vacated) on tc, not c
-// */
-////intersection
-//int findVacated(lattice c, lattice tc, su s, su ts, int ind, lattice** v, int lv) {
-//        extern int d;
-//        const int nsites=s[ind].nsites;
-//        const int ninshl=s[ind].ninshl;
-//        if(lv != nsites+ninshl) {
-//                fprintf(myerr,"findVacated: lv(%d)!=nsites(%d)+ninshl(%d)\n",lv,nsites,ninshl);
-//        }
-//
-//        (*v)=malloc(lv*sizeof(**v));
-//        lattice* tspos=malloc(lv*sizeof(*tspos));
-//        assert((*v)!=NULL || tspos!=NULL /*malloc*/);
-//        for(int i=0;i<nsites;++i) tspos[i]=ts[ind].currPos[i];
-//        for(int i=0;i<ninshl;++i) tspos[i+nsites]=ts[ind].inShlCurrPos[i];
-//        qsort(tspos,lv,sizeof(lattice),(int (*)(const void*,const void*))lattCmp);
-//
-//        int l=0;
-//        for(int i=0;i<nsites;++i) {
-//                (*v)[i]=NULL;
-//                void* bsearchRet=bsearch((s[ind].currPos+i),tspos,lv,sizeof(lattice),
-//                                         (int (*)(const void*,const void*))lattCmp);
-//                if(bsearchRet != NULL) continue; //if found, not vacated
-//                int pos[d];
-//                getPosLat(c,s[ind].currPos[i],pos);
-//                (*v)[l++]=getSiteLat(tc,pos);
-//        }
-//        for(int i=0;i<ninshl;++i) {
-//                (*v)[i+nsites]=NULL;
-//                if(s[ind].inShlCurrPos[i]->su!=-1) continue; //another su occupies inShl site
-//                void* bsearchRet=bsearch((s[ind].inShlCurrPos+i),tspos,lv,sizeof(lattice),
-//                                         (int (*)(const void*,const void*))lattCmp);
-//                if(bsearchRet != NULL) continue; //if found, not vacated
-//                int pos[d];
-//                getPosLat(c,s[ind].inShlCurrPos[i],pos);
-//                (*v)[l++]=getSiteLat(tc,pos);
-//        }
-//        free(tspos);
-//        (*v)=realloc((*v),l*sizeof(**v));
-//        if(l>0) assert(*v!=NULL /*realloc*/);
-//        return l;
-//}
-
 /*******************************/
 /********     core      ********/
 /*******************************/
@@ -415,21 +453,22 @@ int checkSuOverlap(su s, int ind, int inshlopt) {
 //sending lc=0 effectively skips checkCharge()
 //the chgOrig is a hack to allow for use of this
 //function for maintaining spins on solute moves
-int maintainChargeNeut(lattice c, uint32_t* ii, int lii, int chgSwitch, int* dPlus, int* dMinus, int* dZero, pcg32_random_t* rng, FILE* myerr) {
-        extern int N,nPlusSvSites,nMinusSvSites,nZeroSvSites;
+int maintainChargeNeut(lattice c, uint32_t* ii, int lii, int chgSwitch, int* dPlus, int* dMinus, int* dZero, int coreNum, pcg32_random_t* rng, FILE* myerr) {
+        extern int N;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
         assert(lii<=N);
         extern double plusCharge,minusCharge;
         const uint32_t maxIter=10u*(uint32_t)ceil(lii*(1.0+log(lii)));
         double* chg;
         double* chgOrig=NULL;
         if(chgSwitch==1)      chg=checkCharge(c,N,NULL);
-        else if(chgSwitch==0) chg=checkCharge(c,0,NULL); //all 0's
+        else if(chgSwitch==0) chg=checkCharge(c,0,NULL); //returns all 0's
         int delPlus,delMinus,delZero;
-        if(dPlus==NULL)  delPlus=chg[0]-nPlusSvSites;
+        if(dPlus==NULL)  delPlus=chg[0]-nPlusSvSites[coreNum];
         else             delPlus=chg[0]-(*dPlus);
-        if(dMinus==NULL) delMinus=chg[1]-nMinusSvSites;
+        if(dMinus==NULL) delMinus=chg[1]-nMinusSvSites[coreNum];
         else             delMinus=chg[1]-(*dMinus);
-        if(dZero==NULL)  delZero=chg[2]-nZeroSvSites;
+        if(dZero==NULL)  delZero=chg[2]-nZeroSvSites[coreNum];
         else             delZero=chg[2]-(*dZero);
 
         if(delZero<0) {
@@ -465,11 +504,6 @@ int maintainChargeNeut(lattice c, uint32_t* ii, int lii, int chgSwitch, int* dPl
                                 *c[ind].val=minusCharge;
                                 delMinus+=1;
                         }
-                        //else {
-                        //        fprintf(myerr,"maintainChargeNeut: delZ>0 = %d and delP,delM=%d,%d\n",delZero,delPlus,delMinus);
-                        //        free(chg);
-                        //        return -1;
-                        //}
                         delZero-=1;
                 }
         }
@@ -523,21 +557,9 @@ int maintainChargeNeut(lattice c, uint32_t* ii, int lii, int chgSwitch, int* dPl
         }
 
         chg=checkCharge(c,N,chg);
-        //if(chgSwitch==0) {
-        //        assert(chgOrig!=NULL);
-        //        for(int i=0;i<5;++i) {
-        //                chg[i]-=chgOrig[i];
-        //        }
-        //}
-        //if(dPlus==NULL)  delPlus=chg[0]-nPlusSites;
-        //else             delPlus=chg[0]-(*dPlus);
-        //if(dMinus==NULL) delMinus=chg[1]-nMinusSites;
-        //else             delMinus=chg[1]-(*dMinus);
-        //if(dZero==NULL)  delZero=chg[2]-nZeroSites;
-        //else             delZero=chg[2]-(*dZero);
-        delPlus=chg[0]-nPlusSvSites;
-        delMinus=chg[1]-nMinusSvSites;
-        delZero=chg[2]-nZeroSvSites;
+        delPlus=chg[0]-nPlusSvSites[coreNum];
+        delMinus=chg[1]-nMinusSvSites[coreNum];
+        delZero=chg[2]-nZeroSvSites[coreNum];
         if(delPlus!=0 || delMinus!=0 || delZero!=0) {
                 fprintf(myerr,"maintainChargeNeut: delPlus:%d delMinus:%d delZero:%d\n",delPlus,delMinus,delZero);
                 free(chg);
@@ -553,179 +575,265 @@ void setLatInitSu(lattice c) {
         for(int i=0;i<N;++i) c[i].su=-1;
 }
 
-int willParaLatBeChargeNeut() {
-        extern int nPlusSvSites,nMinusSvSites,nPlusSuSites,nMinusSuSites;
+int willParaLatBeChargeNeut(int coreNum) {
+        extern int *nPlusSvSites,*nMinusSvSites,*nPlusSuSites,*nMinusSuSites;
         extern double plusCharge,minusCharge;
-        const double totalPlusCharge=(double)(nPlusSvSites+nPlusSuSites)*plusCharge;
-        const double totalMinusCharge=(double)(nMinusSvSites+nMinusSuSites)*minusCharge;
+        const double totalPlusCharge=(double)(nPlusSvSites[coreNum]+nPlusSuSites[coreNum])*plusCharge;
+        const double totalMinusCharge=(double)(nMinusSvSites[coreNum]+nMinusSuSites[coreNum])*minusCharge;
         if(totalPlusCharge==-totalMinusCharge) return 1;
         else                                   return 0;
 }
 
-double* setLatVal_rand(lattice c, pcg32_random_t* rng, FILE* myerr) {
-        extern int N;
+double* setLatVal_rand(lattice c, su s, int coreNum, pcg32_random_t* rng, FILE* myerr) {
+        extern int N,Nsu;
         extern int* bc;
         extern double plusCharge,minusCharge;
-        extern int nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        extern int nPlusSuSites,nMinusSuSites,nHydrSuSites;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
         int currPlusSvSites=0,currMinusSvSites=0,currZeroSvSites=0;
         int currPlusSuSites=0,currMinusSuSites=0,currHydrSuSites=0;
+        int plusSuSiteNum=0;
+        int minusSuSiteNum=0;
         for(int i=0;i<N;++i) {
                 const uint32_t rand=pcg32_boundedrand_r(rng,3);  // pick a number [0,3): 0->-1; 1->0; 2->1
                 if(rand==0u) {
-                        if(currMinusSvSites<nMinusSvSites) {
+                        if(currMinusSvSites<nMinusSvSites[coreNum]) {
                                 *c[i].val=minusCharge;
                                 ++currMinusSvSites;
                         }
-                        else if(currZeroSvSites<nZeroSvSites) {
+                        else if(currZeroSvSites<nZeroSvSites[coreNum]) {
                                 *c[i].val=0.0;
                                 ++currZeroSvSites;
                         }
-                        else if(currPlusSuSites<nPlusSuSites) {
-                                *c[i].val=plusCharge;
-                                c[i].su=0;
-                                ++currPlusSuSites;
+                        else if(currPlusSuSites<nPlusSuSites[coreNum]) {
+                                int sumPrevSuSites=0;
+                                bool gotSite=false;
+                                for(int j=0;j<Nsu;++j) {
+                                        if(s[j].surfType>0.0) {
+                                                if(plusSuSiteNum<s[j].nsites+sumPrevSuSites) {
+                                                        *c[i].val=s[j].surfType;
+                                                        //c[i].su=j;
+                                                        plusSuSiteNum+=1;
+                                                        gotSite=true;
+                                                        ++currPlusSuSites;
+                                                        break;
+                                                }
+                                                else {
+                                                        sumPrevSuSites+=s[j].nsites;
+                                                }
+                                        }
+                                }
+                                if(gotSite==false) {
+                                        fprintf(stderr,"setLatVal_rand: couldn't get su surfType. exiting\n");
+                                        exit(1);
+                                }
                         }
-                        else if(currMinusSuSites<nMinusSuSites) {
-                                *c[i].val=minusCharge;
-                                c[i].su=0;
-                                ++currMinusSuSites;
+                        else if(currMinusSuSites<nMinusSuSites[coreNum]) {
+                                int sumPrevSuSites=0;
+                                bool gotSite=false;
+                                for(int j=0;j<Nsu;++j) {
+                                        if(s[j].surfType>0.0) {
+                                                if(minusSuSiteNum<s[j].nsites+sumPrevSuSites) {
+                                                        *c[i].val=s[j].surfType;
+                                                        //c[i].su=j;
+                                                        minusSuSiteNum+=1;
+                                                        gotSite=true;
+                                                        ++currMinusSuSites;
+                                                        break;
+                                                }
+                                                else {
+                                                        sumPrevSuSites+=s[j].nsites;
+                                                }
+                                        }
+                                }
+                                if(gotSite==false) {
+                                        fprintf(stderr,"setLatVal_rand: couldn't get su surfType. exiting\n");
+                                        exit(1);
+                                }
                         }
-                        else if(currHydrSuSites<nHydrSuSites) {
+                        else if(currHydrSuSites<nHydrSuSites[coreNum]) {
                                 *c[i].val=plusCharge;
                                 c[i].su=0;
                                 c[i].hydrophobic=true;
                                 ++currHydrSuSites;
                         }
-                        else if(currPlusSvSites<nPlusSvSites) {
+                        else if(currPlusSvSites<nPlusSvSites[coreNum]) {
                                 *c[i].val=plusCharge;
                                 ++currPlusSvSites;
                         }
                         else {
-                                fprintf(myerr,"setLatVal_rand: ran out of sites to place\ni,c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d,%d\n"
+                                fprintf(myerr,"setLatVal_rand: ran out of sites to place\n"
+                                              "i,c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d,%d\n"
                                               "c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d\n",
-                                        i,currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,currMinusSuSites,currHydrSuSites,
-                                        nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites);
+                                        i,currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,
+                                        currMinusSuSites,currHydrSuSites,nPlusSvSites[coreNum],nMinusSvSites[coreNum],
+                                        nZeroSvSites[coreNum],nPlusSuSites[coreNum],nMinusSuSites[coreNum],nHydrSuSites[coreNum]);
                                 exit(1);
                         }
                 }
                 else if(rand==1u) {
-                        if(currZeroSvSites<nZeroSvSites) {
+                        if(currZeroSvSites<nZeroSvSites[coreNum]) {
                                 *c[i].val=0.0;
                                 ++currZeroSvSites;
                         }
-                        else if(currPlusSuSites<nPlusSuSites) {
-                                *c[i].val=plusCharge;
-                                c[i].su=0;
-                                ++currPlusSuSites;
+                        else if(currPlusSuSites<nPlusSuSites[coreNum]) {
+                                int sumPrevSuSites=0;
+                                bool gotSite=false;
+                                for(int j=0;j<Nsu;++j) {
+                                        if(s[j].surfType>0.0) {
+                                                if(plusSuSiteNum<s[j].nsites+sumPrevSuSites) {
+                                                        *c[i].val=s[j].surfType;
+                                                        //c[i].su=j;
+                                                        plusSuSiteNum+=1;
+                                                        gotSite=true;
+                                                        ++currPlusSuSites;
+                                                        break;
+                                                }
+                                                else {
+                                                        sumPrevSuSites+=s[j].nsites;
+                                                }
+                                        }
+                                }
+                                if(gotSite==false) {
+                                        fprintf(stderr,"setLatVal_rand: couldn't get su surfType. exiting\n");
+                                        exit(1);
+                                }
                         }
-                        else if(currMinusSuSites<nMinusSuSites) {
-                                *c[i].val=minusCharge;
-                                c[i].su=0;
-                                ++currMinusSuSites;
+                        else if(currMinusSuSites<nMinusSuSites[coreNum]) {
+                                int sumPrevSuSites=0;
+                                bool gotSite=false;
+                                for(int j=0;j<Nsu;++j) {
+                                        if(s[j].surfType>0.0) {
+                                                if(minusSuSiteNum<s[j].nsites+sumPrevSuSites) {
+                                                        *c[i].val=s[j].surfType;
+                                                        //c[i].su=j;
+                                                        minusSuSiteNum+=1;
+                                                        gotSite=true;
+                                                        ++currMinusSuSites;
+                                                        break;
+                                                }
+                                                else {
+                                                        sumPrevSuSites+=s[j].nsites;
+                                                }
+                                        }
+                                }
+                                if(gotSite==false) {
+                                        fprintf(stderr,"setLatVal_rand: couldn't get su surfType. exiting\n");
+                                        exit(1);
+                                }
                         }
-                        else if(currHydrSuSites<nHydrSuSites) {
+                        else if(currHydrSuSites<nHydrSuSites[coreNum]) {
                                 *c[i].val=plusCharge;
                                 c[i].su=0;
                                 c[i].hydrophobic=true;
                                 ++currHydrSuSites;
                         }
-                        else if(currPlusSvSites<nPlusSvSites) {
+                        else if(currPlusSvSites<nPlusSvSites[coreNum]) {
                                 *c[i].val=plusCharge;
                                 ++currPlusSvSites;
                         }
-                        else if(currMinusSvSites<nMinusSvSites) {
+                        else if(currMinusSvSites<nMinusSvSites[coreNum]) {
                                 *c[i].val=minusCharge;
                                 ++currMinusSvSites;
                         }
                         else {
-                                fprintf(myerr,"setLatVal_rand: ran out of sites to place\ni,c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d,%d\n"
+                                fprintf(myerr,"setLatVal_rand: ran out of sites to place\n"
+                                              "i,c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d,%d\n"
                                               "c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d\n",
-                                        i,currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,currMinusSuSites,currHydrSuSites,
-                                        nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites);
+                                        i,currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,
+                                        currMinusSuSites,currHydrSuSites,nPlusSvSites[coreNum],nMinusSvSites[coreNum],
+                                        nZeroSvSites[coreNum],nPlusSuSites[coreNum],nMinusSuSites[coreNum],nHydrSuSites[coreNum]);
                                 exit(1);
                         }
                 }
                 else if(rand==2u) {
-                        if(currPlusSvSites<nPlusSvSites) {
+                        if(currPlusSvSites<nPlusSvSites[coreNum]) {
                                 *c[i].val=plusCharge;
                                 ++currPlusSvSites;
                         }
-                        else if(currMinusSvSites<nMinusSvSites) {
+                        else if(currMinusSvSites<nMinusSvSites[coreNum]) {
                                 *c[i].val=minusCharge;
                                 ++currMinusSvSites;
                         }
-                        else if(currZeroSvSites<nZeroSvSites) {
+                        else if(currZeroSvSites<nZeroSvSites[coreNum]) {
                                 *c[i].val=0.0;
                                 ++currZeroSvSites;
                         }
-                        else if(currPlusSuSites<nPlusSuSites) {
-                                *c[i].val=plusCharge;
-                                c[i].su=0;
-                                ++currPlusSuSites;
+                        else if(currPlusSuSites<nPlusSuSites[coreNum]) {
+                                int sumPrevSuSites=0;
+                                bool gotSite=false;
+                                for(int j=0;j<Nsu;++j) {
+                                        if(s[j].surfType>0.0) {
+                                                if(plusSuSiteNum<s[j].nsites+sumPrevSuSites) {
+                                                        *c[i].val=s[j].surfType;
+                                                        //c[i].su=j;
+                                                        plusSuSiteNum+=1;
+                                                        gotSite=true;
+                                                        ++currPlusSuSites;
+                                                        break;
+                                                }
+                                                else {
+                                                        sumPrevSuSites+=s[j].nsites;
+                                                }
+                                        }
+                                }
+                                if(gotSite==false) {
+                                        fprintf(stderr,"setLatVal_rand: couldn't get su surfType. exiting\n");
+                                        exit(1);
+                                }
                         }
-                        else if(currMinusSuSites<nMinusSuSites) {
-                                *c[i].val=minusCharge;
-                                c[i].su=0;
-                                ++currMinusSuSites;
+                        else if(currMinusSuSites<nMinusSuSites[coreNum]) {
+                                int sumPrevSuSites=0;
+                                bool gotSite=false;
+                                for(int j=0;j<Nsu;++j) {
+                                        if(s[j].surfType>0.0) {
+                                                if(minusSuSiteNum<s[j].nsites+sumPrevSuSites) {
+                                                        *c[i].val=s[j].surfType;
+                                                        //c[i].su=j;
+                                                        minusSuSiteNum+=1;
+                                                        gotSite=true;
+                                                        ++currMinusSuSites;
+                                                        break;
+                                                }
+                                                else {
+                                                        sumPrevSuSites+=s[j].nsites;
+                                                }
+                                        }
+                                }
+                                if(gotSite==false) {
+                                        fprintf(stderr,"setLatVal_rand: couldn't get su surfType. exiting\n");
+                                        exit(1);
+                                }
                         }
-                        else if(currHydrSuSites<nHydrSuSites) {
+                        else if(currHydrSuSites<nHydrSuSites[coreNum]) {
                                 *c[i].val=plusCharge;
                                 c[i].su=0;
                                 c[i].hydrophobic=true;
                                 ++currHydrSuSites;
                         }
                         else {
-                                fprintf(myerr,"setLatVal_rand: ran out of sites to place\ni,c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d,%d\n"
+                                fprintf(myerr,"setLatVal_rand: ran out of sites to place\n"
+                                              "i,c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d,%d\n"
                                               "c+sv,c-sv,c0sv,c+su,c-su,chsu:%d,%d,%d,%d,%d,%d\n",
-                                        i,currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,currMinusSuSites,currHydrSuSites,
-                                        nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites);
+                                        i,currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,
+                                        currMinusSuSites,currHydrSuSites,nPlusSvSites[coreNum],nMinusSvSites[coreNum],
+                                        nZeroSvSites[coreNum],nPlusSuSites[coreNum],nMinusSuSites[coreNum],nHydrSuSites[coreNum]);
                                 exit(1);
                         }
                 }
                 else exit(1);
         }
-        fprintf(myerr,"setLatVal_rand: rng gave nSvPlus,nSvMinus,nSvZero,nSuPlus,nSuMinus,nSuHydr: %d,%d,%d,%d,%d,%d N:%d nSvPlus/N,nSvMinus/N,nSvZero/N,nSuPlus/N,nSuMinus/N,nSuHydr/N:%f,%f,%f,%f,%f,%f\n"
+        fprintf(myerr,"setLatVal_rand: rng gave nSvPlus,nSvMinus,nSvZero,nSuPlus,nSuMinus,nSuHydr: %d,%d,%d,%d,%d,%d "
+                      "N:%d nSvPlus/N,nSvMinus/N,nSvZero/N,nSuPlus/N,nSuMinus/N,nSuHydr/N:%f,%f,%f,%f,%f,%f\n"
                       "input from .para file nSvPlus,nSvMinus,nSvZero,nSuPlus,nSuMinus,nSuHydr: %d,%d,%d,%d,%d,%d, with +,-: %f,%f.\n",
-                      currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,currMinusSuSites,currHydrSuSites,N,(double)(currPlusSvSites)/N,(double)(currMinusSvSites)/N,(double)(currZeroSvSites)/N,(double)(currPlusSuSites)/N,(double)(currMinusSuSites)/N,(double)(currHydrSuSites)/N,nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites,plusCharge,minusCharge);
+                      currPlusSvSites,currMinusSvSites,currZeroSvSites,currPlusSuSites,currMinusSuSites,currHydrSuSites,
+                      N,(double)(currPlusSvSites)/N,(double)(currMinusSvSites)/N,(double)(currZeroSvSites)/N,(double)(currPlusSuSites)/N,
+                      (double)(currMinusSuSites)/N,(double)(currHydrSuSites)/N,nPlusSvSites[coreNum],nMinusSvSites[coreNum],
+                      nZeroSvSites[coreNum],nPlusSuSites[coreNum],nMinusSuSites[coreNum],nHydrSuSites[coreNum],plusCharge,minusCharge);
 
         return NULL;
-        //uint32_t* ii=malloc(N*sizeof(*ii));
-        //assert(ii!=NULL);
-        //for(uint32_t i=0;i<N;++i) ii[i]=i;
-        //int neutRet=maintainChargeNeut(c,ii,N,1,NULL,NULL,&desiredZeroSpins,rng);
-        //assert(neutRet==0 /*setLatVal_rand: must have neut lattice*/);
-        //free(ii);
-
-        //// sanity check
-        //int ckPlus=0,ckMinus=0,ckZero=0,ckHydr=0;
-        //for(int i=0;i<N;++i) {
-        //        if(c[i].hydrophobic==true) ckHydr+=1;
-        //        else if(*c[i].val>0.0)     ckPlus+=1;
-        //        else if(*c[i].val<0.0)     ckMinus+=1;
-        //        else if(*c[i].val==0.0)    ckZero+=1;
-        //        else {
-        //                fprintf(myerr,"setLatVal_rand: unexpected spin val @ part. %d: %f\n",i,*c[i].val);
-        //                exit(1);
-        //        }
-        //}
-        //if(ckZero!=desiredZeroSpins) {
-        //        fprintf(myerr,"setLatVal_rand: ckZero!=desiredZeroSpins input: %d!=%d\n",ckZero,desiredZeroSpins);
-        //        exit(1);
-        //}
-        //if(ckPlus!=nPlusSites || ckMinus!=nMinusSites) {
-        //        fprintf(myerr,"setLatVal_rand: ckPlus!=ckMinus: %d!=%d\n",ckPlus,ckMinus);
-        //        exit(1);
-        //}
-        //if(ckHydr!=nHydrSites) {
-        //        fprintf(myerr,"setLatVal_rand: ckHydr!=desiredHydrSpins input: %d!=%d\n",ckHydr,nHydrSites);
-        //        exit(1);
-        //}
-        //setCharge(c);
-        //return checkCharge(c,N,NULL);
 }
 
-double* setLatVal_data(lattice c, char** lines, int nlines, FILE* myerr) {
+double* setLatVal_data(lattice c, char** lines, int nlines, int coreNum, FILE* myerr) {
         extern int N;
         int i=0;
         while( strcmp(lines[i],"Cells") != 0 ) { 
@@ -744,13 +852,13 @@ double* setLatVal_data(lattice c, char** lines, int nlines, FILE* myerr) {
                 *c[j].val=atof(words[1]);
                 free(*words);   free(words);    words=NULL;
         }
-        setCharge(c);
+        setCharge(c,coreNum);
         return checkCharge(c,N,NULL);
 }
 
 //equivalent to rho_xyz = cos(pi x)cos(pi y)cos(pi z)
 //FT has only one non-zero term: k=(L/2,L/2,L/2)
-double* setLatVal_simpCubic(lattice c) {
+double* setLatVal_simpCubic(lattice c, int coreNum) {
         extern int N,d;
         extern int* L;
         assert(d==3 /*setLatVal_simpCubic*/);
@@ -769,13 +877,13 @@ double* setLatVal_simpCubic(lattice c) {
                         }
                 }
         }
-        setCharge(c);
+        setCharge(c,coreNum);
         return checkCharge(c,N,NULL);
 }
 
 //equivalent to rho_xyz = cos(pi x)cos(pi y)cos(pi z)
 //FT has only one non-zero term: k=(L/2,L/2,L/2)
-double* setLatVal_simpCubicWDefect(lattice c, pcg32_random_t* rng) {
+double* setLatVal_simpCubicWDefect(lattice c, int coreNum, pcg32_random_t* rng) {
         extern int N,d;
         extern int* L;
         assert(d==3 /*setLatVal_simpCubic*/);
@@ -798,73 +906,13 @@ double* setLatVal_simpCubicWDefect(lattice c, pcg32_random_t* rng) {
         for(int i=0;i<2;++i) {
                 //introduce one defect
                 const uint32_t ind0=pcg32_boundedrand_r(rng,N);
-                const int ind1=getNNPBC((int)ind0,1,NULL);
+                const int ind1=getWrappedNN((int)ind0,1,NULL);
                 const int tmp=*c[ind1].val;
                 *c[ind1].val=*c[ind0].val;
                 *c[ind0].val=tmp;
         }
 
-        setCharge(c);
-        return checkCharge(c,N,NULL);
-}
-
-//equivalent to rho_xyz = cos(pi x/2)cos(pi y/2)cos(pi z/2)
-//FT has only terms with all ki=1 or ki=L-1 non-zero
-double* setLatVal_spacedSimpCubic(lattice c) {
-        extern int N,d;
-        extern int* L;
-        assert(d==3 /*setLatVal_spacedSimpCubic*/);
-        assert(N==L[0]*L[1]*L[2] /*setLatVal_spacedSimpCubic*/);
-        int ct=0;
-        extern double pi;
-        const double eps=0.0000000001;
-        for(int i=0;i<L[0];++i) {
-                const double spinx=cos(pi*i/2.0);
-                for(int j=0;j<L[1];++j) {
-                        const double spiny=cos(pi*j/2.0);
-                        for(int k=0;k<L[2];++k) {
-                                const double spinz=cos(pi*k/2.0);
-                                double spin=spinx*spiny*spinz;
-                                if(spin<eps && spin>-eps)         spin=0.0;
-                                if(spin-1.0<eps && spin-1.0>-eps) spin=1.0;
-                                if(spin+1.0<eps && spin+1.0>-eps) spin=-1.0;
-                                assert(spin==1.0 || spin==0.0 || spin==-1.0 /*setLatVal_spacedSimpCubic*/);
-                                *c[ct].val=spin;
-                                ++ct;
-                        }
-                }
-        }
-        setCharge(c);
-        return checkCharge(c,N,NULL);
-}
-
-//equivalent to rho_xyz = cos(pi x/2)sin(pi y/2)cos(pi z/2): breaks symmetry of spacedSimpCubic in xy plane
-//FT has only terms with all ki=1 or ki=L-1 non-zero
-double* setLatVal_spacedShiftedSimpCubic(lattice c) {
-        extern int N,d;
-        extern int* L;
-        assert(d==3 /*setLatVal_spacedSimpCubic*/);
-        assert(N==L[0]*L[1]*L[2] /*setLatVal_spacedSimpCubic*/);
-        int ct=0;
-        extern double pi;
-        const double eps=0.0000000001;
-        for(int i=0;i<L[0];++i) {
-                const double spinx=cos(pi*i/2.0);
-                for(int j=0;j<L[1];++j) {
-                        const double spiny=sin(pi*j/2.0);
-                        for(int k=0;k<L[2];++k) {
-                                const double spinz=cos(pi*k/2.0);
-                                double spin=spinx*spiny*spinz;
-                                if(spin<eps && spin>-eps)         spin=0.0;
-                                if(spin-1.0<eps && spin-1.0>-eps) spin=1.0;
-                                if(spin+1.0<eps && spin+1.0>-eps) spin=-1.0;
-                                assert(spin==1.0 || spin==0.0 || spin==-1.0 /*setLatVal_spacedSimpCubic*/);
-                                *c[ct].val=spin;
-                                ++ct;
-                        }
-                }
-        }
-        setCharge(c);
+        setCharge(c,coreNum);
         return checkCharge(c,N,NULL);
 }
 
@@ -887,7 +935,6 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
                 c[i].nearNeigh=NULL;
                 c[i].coulNeigh=NULL;
                 c[i].nCoulNeigh=0;
-                //c[i].dNeigh=NULL;
                 c[i].dInvErfcNeigh=NULL;
         }
         fprintf(myerr,"setLatNeigh_coul: NNs: %d\tcoul neighbors:%d\ttotal neighbors (two-way): %d\n",2*d*N,totCoulNeigh,2*d*N+totCoulNeigh);
@@ -926,12 +973,12 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
                 }
                 #if COUL_ON
                 if(totCoulNeigh!=0) {
-                        getPos(i,pos,NULL);
+                        getPos(i,pos);
                         for(int j=0;j<Ncube;++j) {
                                 const double r=dist_intvect_nopbc(cube[j],origin);
                                 if((r <= Rc) && (r > 1.0)) {
                                         for(int e=0;e<d;++e) neighPos[e]=pos[e]+cube[j][e];
-                                        const int neigh=getSitePBC(neighPos,NULL);
+                                        const int neigh=getWrappedSite(neighPos,NULL);
 
 
                                         if(c[i].nCoulNeigh==0) {
@@ -969,6 +1016,150 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
         ptrs[0]=(void*)neighHolder;
         ptrs[1]=(void*)distInvErfcHolder;
         return ptrs;
+}
+
+double* setupEwald(int* L, double sigma, int nCoresP) {
+        fprintf(stderr,"setupEwald: fn called\n");
+        fflush(stderr);
+        if(L==NULL) {
+                extern int* L;
+        }
+        const int d=3;
+        assert(d==3 /*setupEwald assumes...*/);
+        const int N=L[0]*L[1]*L[2];
+        //const double err=10e-10; //hardcode
+        const double pi=acos(-1);
+        const double s2=sigma*sigma;
+        double* ewald=malloc(N*sizeof(*ewald));
+        assert(ewald!=NULL);
+        double complex* cexpValsHolderX=malloc(L[0]*L[0]*sizeof(*cexpValsHolderX));
+        double complex* cexpValsHolderY=malloc(L[1]*L[1]*sizeof(*cexpValsHolderY));
+        double complex* cexpValsHolderZ=malloc(L[2]*L[2]*sizeof(*cexpValsHolderZ));
+        assert(cexpValsHolderX!=NULL && cexpValsHolderY!=NULL && cexpValsHolderZ!=NULL);
+        double complex** cexpValsX=malloc(L[0]*sizeof(*cexpValsX)); //add precompute of vectors
+        double complex** cexpValsY=malloc(L[1]*sizeof(*cexpValsY));
+        double complex** cexpValsZ=malloc(L[2]*sizeof(*cexpValsZ));
+        assert(cexpValsX!=NULL && cexpValsY!=NULL && cexpValsZ!=NULL);
+        int i=0;
+        for(int k=0;k<L[0];++k) {
+                cexpValsX[k]=cexpValsHolderX+i;
+                for(int x=-L[0]/2;x<L[0]/2;++x) {
+                        cexpValsX[k][x+L[0]/2]=cexp(2.0*pi*I/L[0]*k*x);
+                        ++i;
+                }
+        }
+        i=0;
+        for(int k=0;k<L[1];++k) {
+                cexpValsY[k]=cexpValsHolderY+i;
+                for(int y=-L[1]/2;y<L[1]/2;++y) {
+                        cexpValsY[k][y+L[1]/2]=cexp(2.0*pi*I/L[1]*k*y);
+                        ++i;
+                }
+        }
+        i=0;
+        for(int k=0;k<L[2];++k) {
+                cexpValsZ[k]=cexpValsHolderZ+i;
+                for(int z=-L[2]/2;z<L[2]/2;++z) {
+                        cexpValsZ[k][z+L[2]/2]=cexp(2.0*pi*I/L[2]*k*z);
+                        ++i;
+                }
+        }
+        fprintf(stderr,"setupEwald: pre main loop\n");
+        fflush(stderr);
+        const int j=0;
+        #pragma omp parallel for num_threads(nCoresP)
+        for(int l=j+1;l<N;++l) {
+                int rjl[d];
+                getPos(l,rjl);
+                minImageVect(rjl,L);
+                const int x=rjl[0]+L[0]/2;
+                const int y=rjl[1]+L[1]/2;
+                const int z=rjl[2]+L[2]/2;
+                ewald[l]=0.0;
+                double cx,cy,cz;
+                for(int kx=0;kx<L[0];++kx) {
+                        const double kx2=(double)(kx*kx)/(L[0]*L[0]);
+                        if(kx!=0) cx=1.0;
+                        else      cx=0.5;
+                        for(int ky=0;ky<L[1];++ky) {
+                                const double ky2=(double)(ky*ky)/(L[1]*L[1]);
+                                if(ky!=0) cy=1.0;
+                                else      cy=0.5;
+                                for(int kz=0;kz<L[2];++kz) {
+                                        if(kx!=0 || ky!=0 || kz!=0) {
+                                                const double kz2=(double)(kz*kz)/(L[2]*L[2]);
+                                                if(kz!=0) cz=1.0;
+                                                else      cz=0.5;
+                                                const double k2=4.0*pi*pi*(kx2+ky2+kz2);
+                                                //use binary numbers to repr permutations
+                                                //0-> +1
+                                                //1-> -1
+                                                const double complex ekr000=cexpValsX[kx][x]*
+                                                                            cexpValsY[ky][y]*
+                                                                            cexpValsZ[kz][z];
+                                                const double complex ekr001=cexpValsX[kx][x]*
+                                                                            cexpValsY[ky][y]*
+                                                                            conj(cexpValsZ[kz][z]);
+                                                const double complex ekr010=cexpValsX[kx][x]*
+                                                                            conj(cexpValsY[ky][y])*
+                                                                            cexpValsZ[kz][z];
+                                                const double complex ekr011=cexpValsX[kx][x]*
+                                                                            conj(cexpValsY[ky][y])*
+                                                                            conj(cexpValsZ[kz][z]);
+                                                const double Ek=exp(-k2*s2/4.0)/k2*creal(ekr000+ekr001+ekr010+ekr011);
+                                                ewald[l]+=2.0*cx*cy*cz*Ek;
+                                        }
+                                }
+                        }
+                }
+        }
+        fprintf(stderr,"setupEwald: post main loop\n");
+        fflush(stderr);
+        //diag element: 'self E'
+        const double x=0.0;
+        const double y=0.0;
+        const double z=0.0;
+        ewald[0]=0.0;
+        double cx,cy,cz;
+        for(int kx=0;kx<L[0];++kx) {
+                const double kx2=(double)(kx*kx)/(L[0]*L[0]);
+                const double xkx=x*kx/L[0];
+                if(kx!=0) cx=1.0;
+                else      cx=0.5;
+                for(int ky=0;ky<L[1];++ky) {
+                        const double ky2=(double)(ky*ky)/(L[1]*L[1]);
+                        const double yky=y*ky/L[1];
+                        if(ky!=0) cy=1.0;
+                        else      cy=0.5;
+                        for(int kz=0;kz<L[2];++kz) {
+                                if(kx!=0 || ky!=0 || kz!=0) {
+                                        const double kz2=(double)(kz*kz)/(L[2]*L[2]);
+                                        const double zkz=z*kz/L[2];
+                                        if(kz!=0) cz=1.0;
+                                        else      cz=0.5;
+                                        const double k2=4.0*pi*pi*(kx2+ky2+kz2);
+                                        //use binary numbers to repr permutations
+                                        //0-> +1
+                                        //1-> -1
+                                        const double kr000=2.0*pi*(xkx+yky+zkz);
+                                        const double kr001=2.0*pi*(xkx+yky-zkz);
+                                        const double kr010=2.0*pi*(xkx-yky+zkz);
+                                        const double kr011=2.0*pi*(xkx-yky-zkz);
+                                        const double Ek=exp(-k2*s2/4.0)/k2*
+                                                creal(cexp(I*kr000)+cexp(I*kr001)+cexp(I*kr010)+cexp(I*kr011));
+                                        ewald[0]+=2.0*cx*cy*cz*Ek;
+                                }
+                        }
+                }
+        }
+        fprintf(stderr,"setupEwald: work done, pre-cleanup\n");
+        fflush(stderr);
+        free(cexpValsHolderX); free(cexpValsX);
+        free(cexpValsHolderY); free(cexpValsY);
+        free(cexpValsHolderZ); free(cexpValsZ);
+        fprintf(stderr,"setupEwald: post-cleanup. returning sucessfully\n");
+        fflush(stderr);
+        return ewald;
 }
 
 /* create a local subset of the lattice formed from
@@ -1013,26 +1204,11 @@ uint32_t* latToNum(lattice c, lattice* sites, int nsites) {
         return nums;
 }
 
-int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double** ewald, para p, pcg32_random_t* rng, FILE* myerr) {
+int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double* ewald, para p, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         uint32_t ind2=pcg32_boundedrand_r(rng,2*d);
         lattice nn=getNNLat(c,ind,(int)ind2);
         if(nn->su!=-1 || *c[ind].val==*nn->val) return 0;
-
-        ////cheating?
-        //const int tries=8; //arbitrary: larger reduces p of spins==
-        //for(int i=0;i<tries;++i)
-        //{
-        //        if(nn->su==-1 && *nn->val!=*c[ind].val)
-        //                break;
-        //        ind2=pcg32_boundedrand_r(rng, N);
-        //        nn=c+ind2;
-        //}
-        //if(nn->su==-1 && *c[ind].val!=*nn->val)
-        //        ;
-        //else return 0;
-
-        //other spin selection schemes go here
 
         //check for swap
         const int lcore=2;
@@ -1059,29 +1235,19 @@ int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double** ewa
                 deltaEloc[i]=Enewloc[i]-Eoldloc[i];
                 deltaen+=deltaEloc[i];
         }
-        //fprintf(myerr,"en_oldl: %f\t en_newl: %f\ten_oldLR: %f\ten_newLR: %f\n",en_oldl,en_newl,E[2],en_newLR);
-        //fflush(myerr);
 
         #if TEST_BUILD
-        //swapD(c[ind].val, nn->val);
-        ////confirm delta_energy_lr_nflip gives same E as delta_energy_lr_doubleflip
-        //const double deltaElrQuickViaDoubleFlip=(p->Q)*delta_energy_lr_doubleflip(c,ewald,flipped[0],flipped[1]);
-        //if(deltaElrQuickViaDoubleFlip!=deltaEloc[2]) {
-        //        fprintf(myerr,"spinSwapMove: lr_nflip gives DIFFERENT E as doubleflip: nflip: %f\tdouble: %f\n",
-        //                deltaEloc[2],deltaElrQuickViaDoubleFlip);
-        //}
-        //swapD(c[ind].val, nn->val);
         //test if local & full give same deltaen:
         double EnewFull[ENERGY_LENGTH];
-        double EoldFull[ENERGY_LENGTH];
         const double fen_new=energy_full(c,s,EnewFull,ewald,p);
         swapD(c[ind].val, nn->val);
+        double EoldFull[ENERGY_LENGTH];
         const double fen_old=energy_full(c,s,EoldFull,ewald,p);
         swapD(c[ind].val, nn->val);
         if(fabs(fen_new-fen_old-deltaen) >= 0.00001) {
                 fprintf(myerr,"spinSwapMove: full deltaen: %f\t\tlocal deltaen:%f\tdiff:%f\n",fen_new-fen_old,deltaen,fen_new-fen_old-deltaen);
-                fprintf(myerr,"\tfull\tlocal\n0:\t%f\t%f\n1:\t%f\t%f\n2:\t%f\t%f\n3:\t%f\t%f\n3:\t%f\t%f\n3:\t%f\t%f\n4:\t%f\t%f\n5:\t%f\t%f\n6:\t%f\t%f\n" \
-                              "7:\t%f\t%f\n8:\t%f\t%f\n9:\t%f\t%f\n",  \
+                fprintf(myerr,"\tfull\tlocal\n0:\t%f\t%f\n1:\t%f\t%f\n2:\t%f\t%f\n3:\t%f\t%f\n4:\t%f\t%f\n" \
+                              "5:\t%f\t%f\n6:\t%f\t%f\n7:\t%f\t%f\n8:\t%f\t%f\n9:\t%f\t%f\n",  \
                         EnewFull[0]-EoldFull[0],deltaEloc[0],EnewFull[1]-EoldFull[1],deltaEloc[1],EnewFull[2]-EoldFull[2],deltaEloc[2], \
                         EnewFull[3]-EoldFull[3],deltaEloc[3],EnewFull[4]-EoldFull[4],deltaEloc[4],EnewFull[5]-EoldFull[5],deltaEloc[5], \
                         EnewFull[6]-EoldFull[6],deltaEloc[6],EnewFull[7]-EoldFull[7],deltaEloc[7],EnewFull[8]-EoldFull[8],deltaEloc[8], \
@@ -1091,13 +1257,12 @@ int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double** ewa
                 //for(int i=0;i<lsubset;++i) {
                 //        const int num=subset[i]-c;
                 //        int tmppos[d];
-                //        getPos(num,tmppos,NULL);
+                //        getPos(num,tmppos);
                 //        fprintf(myerr,"%d\t%d,%d,%d\t%f\t%p\n",num,tmppos[0],tmppos[1],tmppos[2],*subset[i]->val,subset[i]);
                 //}
                 swapD(c[ind].val, nn->val);
                 return 0;
         }
-        //else fprintf(myerr,"lsubset %d\n",lsubset);
         #endif
 
         free(subset);
@@ -1133,43 +1298,33 @@ int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double** ewa
  * on whether the cell is in solute or not: see
  * MCstep)
  */
-int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double** ewald, para p, pcg32_random_t* rng, FILE* myerr) {
+int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double* ewald, para p, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         uint32_t ind2=pcg32_boundedrand_r(rng, N);
-        lattice nn=c+ind2;
-        if(nn->su!=-1 || *c[ind].val==*nn->val) return 0;
-
-        ////cheating?
-        //const int tries=8; //arbitrary: larger reduces p of spins==
-        //for(int i=0;i<tries;++i)
-        //{
-        //        if(nn->su==-1 && *nn->val!=*c[ind].val)
-        //                break;
-        //        ind2=pcg32_boundedrand_r(rng, N);
-        //        nn=c+ind2;
-        //}
-        //if(nn->su==-1 && *c[ind].val!=*nn->val)
-        //        ;
-        //else return 0;
-
-        //other spin selection schemes go here
+        if(c[ind2].su!=-1 || *c[ind].val==*c[ind2].val) return 0;
 
         //check for swap
         const int lcore=2;
         lattice core[lcore];
         core[0]=c+ind;
-        core[1]=nn;
+        core[1]=c+ind2;
         lattice* subset=NULL;   //subset alloc'd in localSubset
         int lsubset=localSubset(core,lcore,&subset);
         assert(lsubset>0 /*localSubset output*/);
 
-        uint32_t flipped[2];
-        flipped[0]=(ind<ind2) ? ind : ind2; //min
-        flipped[1]=(ind>ind2) ? ind : ind2; //max
+        uint32_t flipped[2]; //=[min(ind,ind2),max(")]
+        if(ind<ind2) {
+                flipped[0]=ind;
+                flipped[1]=ind2;
+        }
+        else {
+                flipped[0]=ind2;
+                flipped[1]=ind;
+        }
         double Eoldloc[ENERGY_LENGTH];
         energy_local(s,Eoldloc,p,subset,lsubset);
         Eoldloc[6]=(p->Q)*energy_lr_nflip(c,ewald,flipped,2);
-        swapD(c[ind].val, nn->val);
+        swapD(c[ind].val, c[ind2].val);
         double Enewloc[ENERGY_LENGTH];
         energy_local(s,Enewloc,p,subset,lsubset);
         Enewloc[6]=(p->Q)*energy_lr_nflip(c,ewald,flipped,2);
@@ -1179,45 +1334,34 @@ int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double** ewald
                 deltaEloc[i]=Enewloc[i]-Eoldloc[i];
                 deltaen+=deltaEloc[i];
         }
-        //fprintf(myerr,"en_oldl: %f\t en_newl: %f\ten_oldLR: %f\ten_newLR: %f\n",en_oldl,en_newl,E[2],en_newLR);
-        //fflush(myerr);
 
         #if TEST_BUILD
-        //swapD(c[ind].val, nn->val);
-        ////confirm delta_energy_lr_nflip gives same E as delta_energy_lr_doubleflip
-        //const double deltaElrQuickViaDoubleFlip=(p->Q)*delta_energy_lr_doubleflip(c,ewald,flipped[0],flipped[1]);
-        //if(deltaElrQuickViaDoubleFlip!=deltaEloc[2]) {
-        //        fprintf(myerr,"spinSwapMove: lr_nflip gives DIFFERENT E as doubleflip: nflip: %f\tdouble: %f\n",
-        //                deltaEloc[2],deltaElrQuickViaDoubleFlip);
-        //}
-        //swapD(c[ind].val, nn->val);
         //test if local & full give same deltaen:
         double EnewFull[ENERGY_LENGTH];
-        double EoldFull[ENERGY_LENGTH];
         const double fen_new=energy_full(c,s,EnewFull,ewald,p);
-        swapD(c[ind].val, nn->val);
+        swapD(c[ind].val, c[ind2].val);
+        double EoldFull[ENERGY_LENGTH];
         const double fen_old=energy_full(c,s,EoldFull,ewald,p);
-        swapD(c[ind].val, nn->val);
+        swapD(c[ind].val, c[ind2].val);
         if(fabs(fen_new-fen_old-deltaen) >= 0.00001) {
                 fprintf(myerr,"spinSwapMove: full deltaen: %f\t\tlocal deltaen:%f\tdiff:%f\n",fen_new-fen_old,deltaen,fen_new-fen_old-deltaen);
-                fprintf(myerr,"\tfull\tlocal\n0:\t%f\t%f\n1:\t%f\t%f\n2:\t%f\t%f\n3:\t%f\t%f\n3:\t%f\t%f\n3:\t%f\t%f\n4:\t%f\t%f\n5:\t%f\t%f\n6:\t%f\t%f\n" \
-                              "7:\t%f\t%f\n8:\t%f\t%f\n9:\t%f\t%f\n",  \
+                fprintf(myerr,"\tfull\tlocal\n0:\t%f\t%f\n1:\t%f\t%f\n2:\t%f\t%f\n3:\t%f\t%f\n" \
+                              "4:\t%f\t%f\n5:\t%f\t%f\n6:\t%f\t%f\n7:\t%f\t%f\n8:\t%f\t%f\n9:\t%f\t%f\n",  \
                         EnewFull[0]-EoldFull[0],deltaEloc[0],EnewFull[1]-EoldFull[1],deltaEloc[1],EnewFull[2]-EoldFull[2],deltaEloc[2], \
                         EnewFull[3]-EoldFull[3],deltaEloc[3],EnewFull[4]-EoldFull[4],deltaEloc[4],EnewFull[5]-EoldFull[5],deltaEloc[5], \
                         EnewFull[6]-EoldFull[6],deltaEloc[6],EnewFull[7]-EoldFull[7],deltaEloc[7],EnewFull[8]-EoldFull[8],deltaEloc[8], \
-                        EnewFull[9]-EoldFull[9],deltaEloc[9]       );
+                        EnewFull[9]-EoldFull[9],deltaEloc[9]);
                 fprintf(myerr,"core spins: %f\t%f\n",*core[0]->val,*core[1]->val);
                 //fprintf(myerr,"i\tx,y,z\tval\taddr\tlsubset %d\n",lsubset);
                 //for(int i=0;i<lsubset;++i) {
                 //        const int num=subset[i]-c;
                 //        int tmppos[d];
-                //        getPos(num,tmppos,NULL);
+                //        getPos(num,tmppos);
                 //        fprintf(myerr,"%d\t%d,%d,%d\t%f\t%p\n",num,tmppos[0],tmppos[1],tmppos[2],*subset[i]->val,subset[i]);
                 //}
-                swapD(c[ind].val, nn->val);
+                swapD(c[ind].val, c[ind2].val);
                 return 0;
         }
-        //else fprintf(myerr,"lsubset %d\n",lsubset);
         #endif
 
         free(subset);
@@ -1240,88 +1384,10 @@ int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double** ewald
                 return 1;
         }
         else {
-                swapD(c[ind].val, nn->val);
+                swapD(c[ind].val, c[ind2].val);
                 return 0;
         }
 }
-        ////spin selection schemes
-        ////scheme: choose 2 random
-        //extern int N;
-        //int ind2=pcg32_boundedrand_r(rng, N);
-        //lattice nn=c+ind2;
-        //if(nn==NULL || nn->su!=-1 || *c[ind].val==*nn->val)      return 0;
-
-        //const uint32_t du=(uint32_t)d;
-        //uint32_t e=pcg32_boundedrand_r(rng, 2u*du);  //pick a neighbor: [-d,-1] neg. dir., [0,d) pos. w/ -1:0,...,-d:(d-1)
-        //lattice nn=c[ind].nearNeigh[e];       //nearNeigh has NNs in increasing getnn order
-        //if(nn==NULL || nn->su!=-1 || *c[ind].val==*nn->val)      return 0;
-
-        //uint32_t e=pcg32_boundedrand_r(rng, 2u*du);
-        //lattice nn=c[ind].nearNeigh[e];
-        //uint32_t elst[2u*du];
-        //for(int ee=0;ee<2*d;++ee) elst[ee]=0u;
-        //uint32_t elstfull=0u;
-        //int ct=0;
-        //while(elstfull==0u && (nn->su!=-1 || *nn->val==*c[ind].val))
-        //{
-        //        elst[e]=1u;
-        //        if(ct%(2*d) == 0)
-        //        {
-        //                elstfull=1u;
-        //                for(int ee=0;ee<2*d;++ee)
-        //                {
-        //                        if(elst[e]==0u)
-        //                        {
-        //                                elstfull=0u;
-        //                                break;
-        //                        }
-        //                }
-        //        }
-        //        ct+=1;
-        //        e=pcg32_boundedrand_r(rng, 2u*du);
-        //        nn=c[ind].nearNeigh[e];
-        //}
-        //if(nn->su==-1 && *c[ind].val!=*nn->val)
-        //        ;
-        //else if(elstfull==1u) return 0;
-
-////not used in build 161128; grand canonical move
-//int spinFlipMove(lattice c, int ind, fftw_complex* ffto, fftw_plan* fftp, para p, pcg32_random_t* rng)
-//{
-//        extern int d;
-//
-//        //check for flip
-//        const int lcore=1;
-//        struct latticeSite core[lcore];
-//        core[0]=c[ind];
-//        lattice* subset=NULL;   //subset alloc'd in localSubset
-//        const int lsubset=localSubset(core,lcore,&subset);
-//        assert(lsubset>0 /*localSubset*/);
-//        const double en_old=energy_local(ffto,fftp,p,subset,lsubset);
-//        *c[ind].val *= -1.0;
-//        const double en_new=energy_local(ffto,fftp,p,subset,lsubset);
-//        free(subset);   subset=NULL;
-//        const double deltaen=en_new-en_old;
-//
-//        //test if local & full give same deltaen:
-//        //double fen_new=energy_full(c,s,NULL,ffto,fftp,p);
-//        //*c[ind].val *= -1.0;    *nn->val *= -1.0;
-//        //double fen_old=energy_full(c,s,NULL,ffto,fftp,p);
-//        //*c[ind].val *= -1.0;    *nn->val *= -1.0;
-//        //fprintf(myerr,"solvntMove: local deltaen: %f\t\tfull deltaen:%f\n",deltaen,fen_new-fen_old);
-//
-//        if(deltaen<=0.0)        return 1;
-//
-//        //check Boltz. prob
-//        const double pr=(double)pcg32_random_r(rng)/UINT32_MAX; //pr in [0,1)
-//        const double boltz=exp(-(p->beta) * deltaen);
-//        if(pr<=boltz)   return 1;
-//        else
-//        {
-//                *c[ind].val *= -1.0;
-//                return 0;
-//        }
-//}
 
 /* make a cluster move as discussed in Grousson, Viot 2001.
  * ind is seed0; find seed1 by randomly selecting a center/
@@ -1350,77 +1416,40 @@ int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double** ewald
  * E_1 is the other part (here, the screened Coulomb part).
  */
 
-uint32_t* getValidClusterSeedPair(lattice c, const uint32_t ind0, pcg32_random_t* rng) {
-        extern int d,N;
-        const double spin0=*c[ind0].val;
-        int seed0[d];
-        getPos(ind0,seed0,NULL);
-        double spin1=spin0;
-        uint32_t* indHolder=malloc(3*sizeof(*indHolder));
-        assert(indHolder!=NULL /*malloc*/);
-        indHolder[0]=ind0;
-        indHolder[1]=0;
-        while(spin1==spin0 || c[indHolder[1]].su!=-1) {
-                const uint32_t rot=pcg32_boundedrand_r(rng, d);       //roll rotation axis
-                const uint32_t cent=pcg32_boundedrand_r(rng, N);      //roll pivot
-                if(cent==ind0) continue;
-                int seed1[d];
-                int centpos[d];
-                getPos(cent,centpos,NULL);
-                for(uint32_t e=0;e<d;++e) {
-                        if(e!=rot) seed1[e]=2*centpos[e]-seed0[e];
-                        else       seed1[e]=seed0[e];
-                }
-                wrapIntoL(seed1,NULL);
-                const uint32_t ind1=(uint32_t)(getSitePBC(seed1,NULL));
-                spin1=*c[ind1].val;
-
-                indHolder[1]=ind1;
-                indHolder[2]=rot;
-        }
-        return indHolder;
-}
-
 //built for fully occupied lattice (ie. each
 //site it +1 or -1). need to rewrite if want
 //to expand to case with defects (0's) or
 //more general solvent types (+2, -1, or di-
 //fferent shapes, etc etc)
-int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, double** ewald, para p, pcg32_random_t* rng, FILE* myerr) {
+int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, double* ewald, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N,Nsu;
         extern int* L;
         extern int* bc;
 
         //boring, low-success, correct way to find pair
-        const uint32_t rot=pcg32_boundedrand_r(rng, d);       //roll rotation axis
-        uint32_t cent=pcg32_boundedrand_r(rng, N);      //roll pivot
+        const uint32_t rot=pcg32_boundedrand_r(rng, d);     //roll rotation axis
+        uint32_t cent=pcg32_boundedrand_r(rng, N);          //roll pivot
         while(cent==ind0) cent=pcg32_boundedrand_r(rng, N); //get valid center
         int seed0[d];
         int seed1[d];
         int centpos[d];
-        getPos(ind0,seed0,NULL);
-        getPos(cent,centpos,NULL);
+        getPos(ind0,seed0);
+        getPos(cent,centpos);
         for(uint32_t e=0;e<d;++e) {
                 seed1[e]=seed0[e];
                 if(e!=rot) seed1[e]-=2*(seed0[e]-centpos[e]);
         }
-        wrapIntoL(seed1,NULL);
-        const uint32_t ind1=(uint32_t)(getSitePBC(seed1,NULL));
+        const uint32_t ind1=getWrappedSite(seed1,NULL);
         if(c[ind1].su!=-1 || *c[ind1].val==*c[ind0].val) return 0;
-        uint32_t* seedPair=malloc(3*sizeof(*seedPair));
-        assert(seedPair!=NULL /*malloc*/);
+        uint32_t seedPair[3];
         seedPair[0]=ind0;
         seedPair[1]=ind1;
         seedPair[2]=rot;
 
-        ////cheating?
-        ////uint32_t* getValidClusterSeedPair(lattice c, const uint32_t ind0, pcg32_random_t* rng)
-        //uint32_t* seedPair=getValidClusterSeedPair(c,ind0,rng);
-
-        double suBlocks=0;
+        double suBlocks=0.0;
         uint32_t nInCluster=0u;
-        uint32_t* inCluster=buildCluster(tc,seedPair[0],seedPair[1],seedPair[2],&nInCluster,&suBlocks,p,rng);
-        free(seedPair);
+        uint32_t* inCluster=buildCluster(tc,seedPair[0],seedPair[1],seedPair[2],&nInCluster,&suBlocks,p,coreNum,rng);
+        const double E_IsuClustMvConstraint=2.0*(p->J)*suBlocks; //see note @ buildCluster()
         if(nInCluster==0u) return 0;
         double clusterE=0.0;
         double deltaE[ENERGY_LENGTH];
@@ -1438,7 +1467,6 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
                 lsubset=localSubset(latInCluster,nInCluster,&subset);
                 E_IsuNew=energy_ising_su_local(s,p,subset,lsubset); //just use s for isimult
                 free(latInCluster); free(subset);
-                const double E_IsuClustMvConstraint=2.0*(p->J)*suBlocks; //see note @ buildCluster()
                 deltaE[3]=E_IsuNew-E_IsuOld+E_IsuClustMvConstraint; //su
                 clusterE=deltaE[3];
 
@@ -1464,19 +1492,16 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         double Enew[ENERGY_LENGTH];
         energy_local(s,Enew,p,subset,lsubset); //just use s for isimult
         free(latInCluster); free(subset);
-        const double E_IsuClustMvConstraint=2.0*(p->J)*suBlocks; //see note @ buildCluster()
-
         Eold[6]=Enew[6]=0.0;
         #if FFT_ON
         Eold[6]=(p->Q)*energy_lr_nflip(c,ewald,inCluster,nInCluster);
         Enew[6]=(p->Q)*energy_lr_nflip(tc,ewald,inCluster,nInCluster);
         #endif
-        //E: 0:ising svsv  1:ising svsu  2:ising susu  3:csr svsv  4:csr svsu  5: csr susu  6: clr
+        //E: 0:ising svsv  1:ising svsu  2:ising susu  3:csr svsv  4:csr svsu  5: csr susu  6: clr ..
         for(int i=0;i<ENERGY_LENGTH;++i) deltaE[i]=Enew[i]-Eold[i];
         deltaE[1]+=E_IsuClustMvConstraint;
         clusterE=(1.0-(p->kT)*(p->beta_eff))*deltaE[0];
         for(int i=1;i<ENERGY_LENGTH;++i) clusterE+=deltaE[i];
-
 
         #if TEST_BUILD
         //full E for cmp w local scheme
@@ -1488,7 +1513,7 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         for(int i=0;i<ENERGY_LENGTH;++i) fdeltaE[i]=fEnew[i]-fEold[i];
         fdeltaE[1]+=E_IsuClustMvConstraint;
         double fclusterE=(1.0-(p->kT)*(p->beta_eff))*fdeltaE[0];
-        for(int i=1;i<ENERGY_LENGTH;++i) fclusterE[i]+=fdeltaE[i];
+        for(int i=1;i<ENERGY_LENGTH;++i) fclusterE+=fdeltaE[i];
         if(fabs(fclusterE-clusterE) >= 0.00001) {
                 fprintf(myerr,"full clusterE,local,diff: %f,%f,%f\n",fclusterE,clusterE,fclusterE-clusterE);
                 fprintf(myerr,"\tfull\tlocal\n0:\t%f\t%f\n1:\t%f\t%f\n2:\t%f\t%f\n3:\t%f\t%f\n"           \
@@ -1496,6 +1521,13 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
                         fdeltaE[0],deltaE[0],fdeltaE[1],deltaE[1],fdeltaE[2],deltaE[2],fdeltaE[3],deltaE[3],\
                         fdeltaE[4],deltaE[4],fdeltaE[5],deltaE[5],fdeltaE[6],deltaE[6],fdeltaE[7],deltaE[7], \
                         fdeltaE[8],deltaE[8],fdeltaE[9],deltaE[9]                                             );
+        }
+        fprintf(myerr,"i\tx,y,z\tval\tlsubset %d\n",lsubset);
+        for(int i=0;i<nInCluster;++i) {
+                const int num=subset[i]-c;
+                int tmppos[d];
+                getPos(inCluster[i],tmppos);
+                fprintf(myerr,"%d\t%d,%d,%d\t%f\n",inCluster[i],tmppos[0],tmppos[1],tmppos[2],*c[inCluster[i]].val);
         }
         #endif
         #endif
@@ -1526,8 +1558,8 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         }
 }
 
-//suBlocks tracks number of moves blocked because ONLY one
-//of the NNs is a su. When this occurs, the move is auto.
+//suBlocks tracks number of submoves blocked because ONLY one
+//of the NNs is a su. When this occurs, the submove is auto.
 //rejected, but there is a cost incurred. Half of the cost
 //is tracked in the solute part of the Ising interaction.
 //The other half is the spin that might have been flipped
@@ -1543,10 +1575,11 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
 //to expand to case with defects (0's) or
 //more general solvent types (+2, -1, or di-
 //fferent shapes, etc etc)
-uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, const uint32_t axis, uint32_t* nInCluster, double* suBlocks, para p, pcg32_random_t* rng) {
+uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, const uint32_t axis, uint32_t* nInCluster, double* suBlocks, para p, int coreNum, pcg32_random_t* rng) {
         double spin0=*c[ind0].val, spin1=*c[ind1].val;
-        extern int d,N,nPlusSvSites,nMinusSvSites;
-        const int stackL = (nPlusSvSites>=nMinusSvSites) ? (nPlusSvSites) : (nMinusSvSites);
+        extern int d,N;
+        extern int *nPlusSvSites,*nMinusSvSites;
+        const int stackL = (nPlusSvSites[coreNum]>=nMinusSvSites[coreNum]) ? nPlusSvSites[coreNum] : nMinusSvSites[coreNum];
         uint32_t* inCluster=malloc(N*sizeof(*inCluster));
         uint32_t* s0=malloc(stackL*sizeof(*s0));
         uint32_t* s1=malloc(stackL*sizeof(*s1));
@@ -1559,6 +1592,7 @@ uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, cons
         #if !COUL_ON    //for pure I
         const double boltz=1.0-exp(-4.0*(p->beta)*(p->J));
         #endif
+        *nInCluster=0u;
         s0[0]=ind0;
         s1[0]=ind1;
         inCluster[(*nInCluster)++]=s0[0];
@@ -1571,7 +1605,7 @@ uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, cons
                 uint32_t lnn=0u;
                 for(int e=0;e<2*d;++e) { //d=3 => nn->[-z,-y,-x,x,y,z]
                         nn0[lnn]=(uint32_t)(c[s0[i]].nearNeigh[e]-c);
-                        const int erot=(e!=d+axis && e!=d-axis-1) ? 2*d-e-1 : e; //axis->e 0->2 1->1 2->0; consider rotn by pi abt axis
+                        const int erot=(e-d!=axis && e-d!=-axis-1) ? 2*d-e-1 : e; //axis->e 0->2 1->1 2->0; consider rotn by pi abt axis
                         nn1[lnn]=(uint32_t)(c[s1[i]].nearNeigh[erot]-c);
                         if(c[nn0[lnn]].su == -1 && c[nn1[lnn]].su == -1) {
                                 if( *c[nn0[lnn]].val == spin0 && *c[nn1[lnn]].val == spin1         \
@@ -1580,17 +1614,22 @@ uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, cons
                                     && bsearch((nn1+lnn),inCluster,*nInCluster,sizeof(uint32_t),      \
                                                  (int (*)(const void*,const void*))uint32_tCmp)==NULL  )   ++lnn;
                         }
-                        else {
-                                uint32_t* nnNotSu=nn0;
-                                double* nonSuClusterSpin=&spin0;
+                        else { //if only one in su, update suBlocks ctr
+                                if(c[nn0[lnn]].su != -1 && c[nn1[lnn]].su != -1) {
+                                        continue; //both su: drop out
+                                }
+                                uint32_t* nnNotSu;
+                                double* nonSuClusterSpin;
                                 if(c[nn0[lnn]].su != -1) {
                                         nnNotSu=nn1;
                                         nonSuClusterSpin=&spin1;
                                 }
-                                if(nnNotSu==nn1 && c[nn1[lnn]].su != -1) continue; //both su: drop out
+                                else {
+                                        nnNotSu=nn0;
+                                        nonSuClusterSpin=&spin0;
+                                }
                                 if(*c[nnNotSu[lnn]].val == *nonSuClusterSpin) *suBlocks+=1.0;
                                 else                                          *suBlocks-=1.0;
-                                        
                         }
                 }
                 for(uint32_t j=0;j<lnn;++j) {
@@ -1612,6 +1651,7 @@ uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, cons
         return inCluster;
 }
 
+//if su is asymmetric and rotates, may need nudge back onto lattice
 double* comOrientationNudge(lattice c, su s, int ind, double* tCom, double** tOrientation, pcg32_random_t* rng, FILE* myerr) {
         extern int d;
         const int nsites=s[ind].nsites, ninshl=s[ind].ninshl;
@@ -1701,26 +1741,25 @@ double* comOrientationNudge(lattice c, su s, int ind, double* tCom, double** tOr
 //solvent, we can, for the right parameters, increase
 //the probability of a successful move.
 
-int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind, double** ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, pcg32_random_t* rng, FILE* myerr) {
+int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         void* ptrs[10]; //hardcode
         int nptrs=0;
-        //choose dist. & dir
-        const int changeD=s[ind].nMotion;
-        const int strtD=d-changeD;
+        //roll dist., orientation, dir
         double trialCom[d];
         double oldUnwrappedCom[d];
         double unwrappedCom[d];
-
         for(int e=0;e<d;++e) {
                 trialCom[e]=s[ind].com[e];
                 unwrappedCom[e]=s[ind].unwrappedCom[e];
                 oldUnwrappedCom[e]=s[ind].unwrappedCom[e];
         }
+        const int changeD=s[ind].nMotion;
+        const int strtD=d-changeD;
         int j=0;
         for(int e=strtD;e<d;++e) { //dist in suStep*[-0.5,0.5)
-                const double rn=(double)pcg32_random_r(rng)/UINT32_MAX - 0.5;
-                unwrappedCom[e]+=round(s[ind].suStep * rn);
+                const double rn=(double)pcg32_random_r(rng)/UINT32_MAX-0.5;
+                unwrappedCom[e]+=round(s[ind].suStep*rn);
                 trialCom[e]=unwrappedCom[e];
                 wrapIntoL_double(trialCom, NULL); //PBC
                 if(fabs(trialCom[e]-s[ind].com[e])<=DBL_EPSILON) ++j;
@@ -1757,7 +1796,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 freeAll(ptrs,nptrs);
                 return 0;
         }
-
+        //if su is asymmetric and rotates, may need nudge back onto lattice
         double* nudge=comOrientationNudge(c,s,ind,trialCom,trialOrientation,rng,myerr);
         if(nudge!=NULL) {
                 #if TEST_BUILD
@@ -1778,7 +1817,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         //setup ts & tc for proposed move
         updSuCurPos(tc,ts,ind,(double*)NULL);
         extern bool hydrophobicExist;
-        if(checkSuOverlap(ts,ind,inshlopt)==1) { //proposed move overlaps with another solute
+        if(checkSuOverlap(ts,ind,inshlopt)==1) {
                 for(int k=0;k<N;++k) *tc[k].val=*c[k].val;
                 for(int e=0;e<d;++e) {
                         ts[ind].unwrappedCom[e]=oldUnwrappedCom[e];
@@ -1794,17 +1833,25 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 return 0;
         }
 
-        //build local region for suMove. used for local E calc. as well
-        //as for sv relaxtion pre&post su move if desired
+        //build local region for suMove. used for local E calc as
+        //well as for sv relaxtion pre&post su move if desired
         uint32_t* core=NULL;
         uint32_t lcore=buildSuMoveCore(c,tc,s,ts,ind,&core);
         uint32_t lcoreE=lcore;
         lattice* coreE=NULL;
         double EsvRelaxi0[ENERGY_LENGTH];
         double EsvRelaxi1[ENERGY_LENGTH];
+        #if TEST_BUILD
+        double EsvRelaxi0Full[ENERGY_LENGTH];
+        double EsvRelaxi1Full[ENERGY_LENGTH];
+        #endif
         for(int i=0;i<ENERGY_LENGTH;++i) {
                 EsvRelaxi0[i]=0.0;
                 EsvRelaxi1[i]=0.0;
+                #if TEST_BUILD
+                EsvRelaxi0Full[i]=0.0;
+                EsvRelaxi1Full[i]=0.0;
+                #endif
         }
         if(sweepsMult!=0.0 && kTeff!=0.0) { //relax solvent local to solute
                 lattice* coreLat=numToLat(tc,core,(int)lcore);
@@ -1818,8 +1865,14 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 lcoreE=localSubset(corePlusNNLat,lcoreE,&coreE);
                 energy_local(s,EsvRelaxi0,p,coreE,lcoreE); //E_i
                 EsvRelaxi0[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
-                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff,p,rng,myerr);
+                #if TEST_BUILD
+                energy_full(tc,ts,EsvRelaxi0Full,ewald,p);
+                #endif
+                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff,p,coreNum,rng,myerr);
                 energy_local(s,EsvRelaxi1,p,coreE,lcoreE); //E_f
+                #if TEST_BUILD
+                energy_full(tc,ts,EsvRelaxi1Full,ewald,p);
+                #endif
                 EsvRelaxi1[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
                 free(coreLat);
                 free(suLocalRegionLat);
@@ -1837,6 +1890,10 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         double EsuiSum=energy_local(s,Esui,p,coreE,lcoreE);
         Esui[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
         EsuiSum+=Esui[6];
+        #if TEST_BUILD
+        double EsuiFull[ENERGY_LENGTH];
+        double EsuiSumFull=energy_full(tc,ts,EsuiFull,ewald,p);
+        #endif
 
         //trial lattice: move the su
         updLatSuStatus(tc,ts);
@@ -1846,7 +1903,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         uint32_t* vacated=NULL;
         const int lv=findVacated(c,tc,s,ts,ind,&vacated);
         ptrs[nptrs++]=(void*)vacated;
-        if(lv==0) { //happens when "flips in place"
+        if(lv==0) { //happens when rotates in place
                 #if TEST_BUILD
                 fprintf(myerr,"suMove: findVacated returns 0 sites vacated\n");
                 #endif
@@ -1872,23 +1929,11 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         }
 
         double* tcchg=checkCharge(tc,N,NULL);
-        extern int nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        int desiredPlus=nPlusSvSites-tcchg[0],desiredMinus=nMinusSvSites-tcchg[1],desiredZero=nZeroSvSites-tcchg[2];
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
+        int desiredPlus=nPlusSvSites[coreNum]-tcchg[0],desiredMinus=nMinusSvSites[coreNum]-tcchg[1],desiredZero=nZeroSvSites[coreNum]-tcchg[2];
         free(tcchg);
-        //fprintf(myerr,"suMove: entering maintainChargeNeut with lv %d d+,d-,d0\tn+,n-,n0: %d,%d,%d\t%d,%d,%d\n",lv,desiredPlus,desiredMinus,desiredZero,nPlusSites,nMinusSites,nZeroSites);
-        //for(int i=0;i<N;++i) {
-        //        int ttmppos[d];
-        //        getPos(i,ttmppos,NULL);
-        //        fprintf(myerr,"%d\t%d,%d,%d\t%.1f,%d\t%.1f,%d\t%.1f\n",i,ttmppos[0],ttmppos[1],ttmppos[2],*c[i].val,c[i].su,*tc[i].val,tc[i].su,*tc[i].val-*c[i].val);
-        //}
-        //for(int i=0;i<lv;++i) {
-        //        int ttmppos[d];
-        //        uint32_t number=vacated[i];
-        //        getPos(number,ttmppos,NULL);
-        //        fprintf(myerr,"%d\t%d,%d,%d\t%.1f,%d\t%.1f,%d\t%.1f\n",(int)number,ttmppos[0],ttmppos[1],ttmppos[2],*c[number].val,c[number].su,*tc[number].val,tc[number].su,*tc[number].val-*c[number].val);
-        //}
 
-        int neutRet=maintainChargeNeut(tc,vacated,lv,0,&desiredPlus,&desiredMinus,&desiredZero,rng,myerr); //giving lc=0 -> skips internal checkCharge()
+        int neutRet=maintainChargeNeut(tc,vacated,lv,0,&desiredPlus,&desiredMinus,&desiredZero,coreNum,rng,myerr); //giving lc=0 -> skips internal checkCharge()
         if(neutRet!=0) { //neut failed
                 for(int k=0;k<N;++k) *tc[k].val=*c[k].val;
                 for(int e=0;e<d;++e) {
@@ -1910,20 +1955,38 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         double EsufSum=energy_local(s,Esuf,p,coreE,lcoreE);
         Esuf[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
         EsufSum+=Esuf[6];
+        #if TEST_BUILD
+        double EsufFull[ENERGY_LENGTH];
+        double EsufSumFull=energy_full(tc,ts,EsufFull,ewald,p);
+        #endif
 
         //post-su relaxation moves if desired. already built core
         double EsvRelaxf0[ENERGY_LENGTH];
         double EsvRelaxf1[ENERGY_LENGTH];
+        #if TEST_BUILD
+        double EsvRelaxf0Full[ENERGY_LENGTH];
+        double EsvRelaxf1Full[ENERGY_LENGTH];
+        #endif
         for(int i=0;i<ENERGY_LENGTH;++i) {
                 EsvRelaxf0[i]=0.0;
                 EsvRelaxf1[i]=0.0;
+                #if TEST_BUILD
+                EsvRelaxf0Full[i]=0.0;
+                EsvRelaxf1Full[i]=0.0;
+                #endif
         }
         if(sweepsMult!=0.0 && kTeff!=0.0) { //relax solvent local to solute
                 energy_local(s,EsvRelaxf0,p,coreE,lcoreE); //E_i
                 EsvRelaxf0[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
-                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff,p,rng,myerr);
+                #if TEST_BUILD
+                energy_full(tc,ts,EsvRelaxf0Full,ewald,p);
+                #endif
+                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff,p,coreNum,rng,myerr);
                 energy_local(s,EsvRelaxf1,p,coreE,lcoreE); //E_f
                 EsvRelaxf1[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
+                #if TEST_BUILD
+                energy_full(tc,ts,EsvRelaxf1Full,ewald,p);
+                #endif
         }
 
         const double deltaEumb=energy_umbr(tu)-energy_umbr(u);
@@ -1932,8 +1995,15 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         double betadeltaen=b*deltaEumb;
         double betadeltaE[ENERGY_LENGTH];
         double deltaE[ENERGY_LENGTH];
+        double deltaESum=b*deltaEumb;
         for(int i=0;i<ENERGY_LENGTH;++i) {
-                deltaE[i]=EsvRelaxf1[i]-EsvRelaxi0[i];
+                if(sweepsMult!=0.0 && kTeff!=0.0) {
+                        deltaE[i]=EsvRelaxf1[i]-EsvRelaxi0[i];
+                }
+                else {
+                        deltaE[i]=Esuf[i]-Esui[i];
+                }
+                deltaESum+=deltaE[i];
                 betadeltaE[i]=b*(Esuf[i]-Esui[i])+ \
                               (b-be)*(EsvRelaxf1[i]-EsvRelaxf0[i]+EsvRelaxi1[i]-EsvRelaxi0[i]);
                 betadeltaen+=betadeltaE[i];
@@ -1941,30 +2011,37 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
 
         //cmp to full energy:
         #if TEST_BUILD
-        fprintf(myerr,"needs updating\n");
-        exit(1);
-        double EnewFull[ENERGY_LENGTH];
-        energy_full(tc,ts,EnewFull,ewald,p);
-        double EoldFull[ENERGY_LENGTH];
-        energy_full(c,s,EoldFull,ewald,p);
-        double fdeltaE[ENERGY_LENGTH];
-        double deltaenFull=deltaEumb;
+        double betadeltaenFull=b*deltaEumb;
+        double betadeltaEFull[ENERGY_LENGTH];
+        double deltaEFull[ENERGY_LENGTH];
+        double deltaEFullSum=b*deltaEumb;
         for(int i=0;i<ENERGY_LENGTH;++i) {
-                fdeltaE[i]=EnewFull[i]-EoldFull[i];
-                deltaenFull+=fdeltaE[i];
+                if(sweepsMult!=0.0 && kTeff!=0.0) {
+                        deltaEFull[i]=EsvRelaxf1Full[i]-EsvRelaxi0Full[i];
+                }
+                else {
+                        deltaEFull[i]=EsufFull[i]-EsuiFull[i];
+                }
+                deltaEFullSum+=deltaEFull[i];
+                betadeltaEFull[i]=b*(EsufFull[i]-EsuiFull[i])+ \
+                              (b-be)*(EsvRelaxf1Full[i]-EsvRelaxf0Full[i]+EsvRelaxi1Full[i]-EsvRelaxi0Full[i]);
+                betadeltaenFull+=betadeltaEFull[i];
         }
-        if(fabs(deltaenFull-deltaen) >= 0.00001) {
-                fprintf(myerr,"suMove(): deltaenFull,deltaen,diff: %f,%f,%f\n",deltaenFull,deltaen,deltaenFull-deltaen);
+        if(fabs(betadeltaenFull-betadeltaen) >= 0.00001 || fabs(deltaEFullSum-deltaESum) >= 0.00001) {
+                fprintf(myerr,"suMove(): betadeltaenFull,betadeltaen,diff: %f,%f,%f\n",betadeltaenFull,betadeltaen,betadeltaenFull-betadeltaen);
+                fprintf(myerr,"deltaEFullSum,deltaESum,diff: %f,%f,%f\n",deltaEFullSum,deltaESum,deltaEFullSum-deltaESum);
                 fprintf(myerr,"\tfull\tlocal\tf-l\n0:\t%f\t%f\t%f\n1:\t%f\t%f\t%f\n2:\t%f\t%f\t%f\n3:\t%f\t%f\t%f\n4:\t%f\t%f\t%f\n" \
                               "5:\t%f\t%f\t%f\n6:\t%f\t%f\t%f\n7:\t%f\t%f\t%f\n8:\t%f\t%f\t%f\n9:\t%f\t%f\t%f\n", \
-                        fdeltaE[0],deltaE[0],fdeltaE[0]-deltaE[0],fdeltaE[1],deltaE[1],fdeltaE[1]-deltaE[1],fdeltaE[2],deltaE[2],fdeltaE[2]-deltaE[2],fdeltaE[3],deltaE[3],fdeltaE[3]-deltaE[3], \
-                        fdeltaE[4],deltaE[4],fdeltaE[4]-deltaE[4],fdeltaE[5],deltaE[5],fdeltaE[5]-deltaE[5],fdeltaE[6],deltaE[6],fdeltaE[6]-deltaE[6],fdeltaE[7],deltaE[7],fdeltaE[7]-deltaE[7], \
-                        fdeltaE[8],deltaE[8],fdeltaE[8]-deltaE[8],fdeltaE[9],deltaE[9],fdeltaE[9]-deltaE[9]);
+                        betadeltaEFull[0],betadeltaE[0],betadeltaEFull[0]-betadeltaE[0],betadeltaEFull[1],betadeltaE[1],betadeltaEFull[1]-betadeltaE[1], \
+                        betadeltaEFull[2],betadeltaE[2],betadeltaEFull[2]-betadeltaE[2],betadeltaEFull[3],betadeltaE[3],betadeltaEFull[3]-betadeltaE[3], \
+                        betadeltaEFull[4],betadeltaE[4],betadeltaEFull[4]-betadeltaE[4],betadeltaEFull[5],betadeltaE[5],betadeltaEFull[5]-betadeltaE[5], \
+                        betadeltaEFull[6],betadeltaE[6],betadeltaEFull[6]-betadeltaE[6],betadeltaEFull[7],betadeltaE[7],betadeltaEFull[7]-betadeltaE[7], \
+                        betadeltaEFull[8],betadeltaE[8],betadeltaEFull[8]-betadeltaE[8],betadeltaEFull[9],betadeltaE[9],betadeltaEFull[9]-betadeltaE[9]);
                 fprintf(myerr,"corei\tval,su\ttval,tsu\ttval-val\n");
                 for(int i=0;i<lcore;++i) {
                         int ci=(int)core[i];
                         int tmppos[d];
-                        getPos(ci,tmppos,NULL);
+                        getPos(ci,tmppos);
                         fprintf(myerr,"%d\t%d,%d,%d\t%.1f,%d\t%.1f,%d\t%.1f\n",ci,tmppos[0],tmppos[1],tmppos[2],*c[ci].val,c[ci].su,*tc[ci].val,tc[ci].su,*tc[ci].val-*c[ci].val);
                 }
                 //assert(lsubset_old==lsubset_new);
@@ -1978,7 +2055,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 for(int i=0;i<N;++i) {
                         if(fabs(*tc[i].val-*c[i].val)>0.00001 || tc[i].su!=c[i].su) {
                                 int tmppos[d];
-                                getPos(i,tmppos,NULL);
+                                getPos(i,tmppos);
                                 fprintf(myerr,"%d\t%d,%d,%d\t%.1f,%d\t%.1f,%d\t%.1f\n",i,tmppos[0],tmppos[1],tmppos[2],*c[i].val,c[i].su,*tc[i].val,tc[i].su,*tc[i].val-*c[i].val);
                         }
                 }
@@ -1994,8 +2071,6 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 return 0;
         }
         #endif
-        //free(core_old); free(subset_old);
-        //free(core_new); free(subset_new);
 
         //accept/reject config?
         if(betadeltaen<=0.0) { // accepted
@@ -2041,72 +2116,6 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 return 0;
         }
 }
-
-        ////full energy scheme
-        //#if !COUL_ON
-        //double Eold[4];
-        //if(E==NULL) E=Eold;
-        //energy_full(c,s,E,ewald,p);
-        //#endif
-        //double Enew[4];
-        //energy_full(tc,ts,Enew,ewald,p);
-        //const double deltaEumb=energy_umbr(tu)-energy_umbr(u);
-        //const double deltaen=Enew[0]-E[0] + Enew[1]-E[1] + Enew[2]-E[2] + Enew[3]-E[3] + deltaEumb;
-
-        //old local energy routine: goes where following comment is located above
-        //(old local energy scheme goes here)
-        //faster, but more complicated & broken
-        ////energies: first build core_new and core_old for localSubset
-        //const int lcore=2*(s[ind].nsites+s[ind].ninshl);
-        //su tmpsu=malloc(1*sizeof(*tmpsu));
-        //lattice core_old=malloc(lcore*sizeof(*core_old));
-        //lattice core_new=malloc(lcore*sizeof(*core_new));
-        //lattice* tmpsusites=malloc((s[ind].nsites+s[ind].ninshl)*sizeof(*tmpsusites));
-        //assert(tmpsu!=NULL && core_old!=NULL && core_new!=NULL && tmpsusites!=NULL /*malloc*/);
-        //ptrs[nptrs++]=(void*)tmpsu;
-        //ptrs[nptrs++]=(void*)core_old;
-        //ptrs[nptrs++]=(void*)core_new;
-        //ptrs[nptrs++]=(void*)tmpsusites;
-        //tmpsu->nsites=s[ind].nsites;
-        //tmpsu->ninshl=s[ind].ninshl;
-        //tmpsu->relPos=s[ind].relPos;
-        //tmpsu->inShlRelPos=s[ind].inShlRelPos;
-        //tmpsu->currPos=tmpsusites;
-        //tmpsu->inShlCurrPos=tmpsusites+tmpsu->nsites;
-        //for(int i=0;i<s[ind].nsites;++i) {
-        //        core_old[i]=*(s[ind].currPos[i]);
-        //        core_new[i]=*(ts[ind].currPos[i]);
-        //}
-        //for(int i=0;i<s[ind].ninshl;++i) {
-        //        core_old[i+s[ind].nsites]=*(s[ind].inShlCurrPos[i]);
-        //        core_new[i+s[ind].nsites]=*(ts[ind].inShlCurrPos[i]);
-        //}
-        //updSuCurPos(c,tmpsu,0,trialCom);
-        //for(int i=0;i<tmpsu->nsites;++i)        core_old[i+lcore/2]=*(tmpsu->currPos[i]);
-        //for(int i=0;i<tmpsu->ninshl;++i)        core_old[i+s[ind].nsites+lcore/2]=*(tmpsu->inShlCurrPos[i]);
-        //        
-        //updSuCurPos(tc,tmpsu,0,oldCom);
-        //for(int i=0;i<tmpsu->nsites;++i)        core_new[i+lcore/2]=*(tmpsu->currPos[i]);
-        //for(int i=0;i<tmpsu->ninshl;++i)        core_new[i+s[ind].nsites+lcore/2]=*(tmpsu->inShlCurrPos[i]);
-        //        
-        ////energies: get subsets & compute energies
-        //lattice* subset_old=NULL;       //malloc handled in localSubset()
-        //lattice* subset_new=NULL;
-        //const int lsubset_old=localSubset(core_old,lcore,&subset_old);
-        //const int lsubset_new=localSubset(core_new,lcore,&subset_new);
-        //ptrs[nptrs++]=(void*)subset_old;
-        //ptrs[nptrs++]=(void*)subset_new;
-        //assert(lsubset_old==lsubset_new);
-        //assert(lsubset_new>0 /*localSubset*/);
-        //const double en_old=energy_local(ffto,fftp,p,subset_old,lsubset_old)+energy_umbr(u);
-        //const double en_new=energy_local(tffto,tfftp,p,subset_new,lsubset_new)+energy_umbr(tu);
-        //const double deltaen=en_new-en_old;
-
-        ////test if local & full give same deltaen:
-        ////const double fen_old=energy_full(c,s,NULL,ffto,fftp,p)+energy_umbr(u);
-        ////const double fen_new=energy_full(tc,ts,NULL,tffto,tfftp,p)+energy_umbr(u);
-        ////fprintf(myerr,"suMove: local deltaen: %f\t\tfull deltaen:%f\n",deltaen,fen_new-fen_old);
-        ////fflush(myerr);
 
 //union
 uint32_t buildSuMoveCore(lattice c, lattice tc, su s, su ts, int ind, uint32_t** core) {
@@ -2188,7 +2197,7 @@ int findVacated(lattice c, lattice tc, su s, su ts, int ind, uint32_t** v) {
         return lv;
 }
 
-int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double** ewald, double sweepsMult, double kTeff, para p, pcg32_random_t* rng, FILE* myerr) {
+int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double* ewald, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         const uint32_t itera=(uint32_t)round(lcore*sweepsMult);
         para pEff=copyPara(p);
         pEff->kT+=kTeff;
@@ -2206,10 +2215,10 @@ int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double** ew
         free(pEff);
         extern int N;
         double* chg=checkCharge(tc,N,NULL);
-        extern int nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        const int delPlus=chg[0]-nPlusSvSites;
-        const int delMinus=chg[1]-nMinusSvSites;
-        const int delZero=chg[2]-nZeroSvSites;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
+        const int delPlus=chg[0]-nPlusSvSites[coreNum];
+        const int delMinus=chg[1]-nMinusSvSites[coreNum];
+        const int delZero=chg[2]-nZeroSvSites[coreNum];
         if(delPlus!=0 || delMinus!=0 || delZero!=0) {
                 fprintf(myerr,"relaxSvNearSu: delPlus:%d delMinus:%d delZero:%d ; move refused\n",delPlus,delMinus,delZero);
         }
@@ -2218,15 +2227,12 @@ int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double** ew
 }
 
 #if EQUI_INNER_DUMP
-int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double** ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, pcg32_random_t* rng, int enFreq, int dumpFreq, int suComFreq, int umbrFreq, int dataFreq, FILE* dumpout, char* prefix, int outerN, bool outputStyleFI, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
+int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, int enFreq, int dumpFreq, int suComFreq, int umbrFreq, int dataFreq, FILE* dumpout, char* prefix, int outerN, bool outputStyleFI, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
 #endif
 #if !EQUI_INNER_DUMP
-int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double** ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, pcg32_random_t* rng, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
+int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
 #endif
         #if EQUI_INNER_DUMP
-        //extern FILE* myout;
-        //extern FILE* mySuComOut;
-        //extern FILE* myumbout;
         extern int d;
         #endif
         extern int N,Nsu;
@@ -2248,13 +2254,11 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
         for(int i=0;i<N;++i) { //N proposed moves 'one step'; ~1MD timestep
                 const uint32_t ind=pcg32_boundedrand_r(rng,N);
                 if(c[ind].su==-1) { //not in solute: standard swap/flip move
-                        const int tmp=spinSwapMove(c,tc,s,E,ind,ewald,p,rng,myerr);
-                        //const int tmp=spinFlipMove(c,ind,p,rng); //non-conserved order parameter
-                        nmoves[0]+=tmp;
+                        const int mvSuccess=spinSwapMove(c,tc,s,E,ind,ewald,p,rng,myerr);
+                        if(mvSuccess>0) ++nmoves[0];
                         ++nmoves[1];
                 }
                 else { //in solute: solute move
-                        //fprintf(myerr,"su move\t");
                         const double roll=(double)pcg32_random_r(rng)/UINT32_MAX;
                         if(roll<=s[c[ind].su].mvProb) {
                                 #if TEST_BUILD
@@ -2266,8 +2270,8 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
                                         }
                                 }
                                 #endif
-                                const int tmp=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff,p,rng,myerr);
-                                nmoves[2]+=tmp;
+                                const int mvSuccess=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff,p,coreNum,rng,myerr);
+                                if(mvSuccess>0) ++nmoves[2];
                                 ++nmoves[3];
                         }
                 }
@@ -2297,7 +2301,7 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
                 }
                 if(dumpFreq!=0 && j%dumpFreq==0) {
                         if(outputStyleFI==true) dumpFI(c,s,j,dumpout,myerr);
-                        else                    dumpLammps(c,s,j,dumpout,myerr);
+                        else                    dumpLammps(c,s,j,coreNum,dumpout,myerr);
                 }
                 if(s!=NULL && suComFreq!=0 && j%suComFreq==0) dumpAllSuComs(s,mySuComOut);
                 if(u!=NULL && umbrFreq!=0 && j%umbrFreq==0) {
@@ -2327,10 +2331,10 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
                 #endif
         }
         double* chg=checkCharge(c,N,NULL);
-        extern int nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        const int delPlus=chg[0]-nPlusSvSites;
-        const int delMinus=chg[1]-nMinusSvSites;
-        const int delZero=chg[2]-nZeroSvSites;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
+        const int delPlus=chg[0]-nPlusSvSites[coreNum];
+        const int delMinus=chg[1]-nMinusSvSites[coreNum];
+        const int delZero=chg[2]-nZeroSvSites[coreNum];
         if(delPlus!=0 || delMinus!=0 || delZero!=0) {
                 fprintf(myerr,"MCstep_flipswap: delPlus:%d delMinus:%d delZero:%d ; move refused\n",delPlus,delMinus,delZero);
         }
@@ -2338,7 +2342,7 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
         return nmoves;
 }
 
-int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double** ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, pcg32_random_t* rng, FILE* mvstats, FILE* myerr) {
+int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* mvstats, FILE* myerr) {
         extern int N,Nsu;
         const int mvtypes=2*3;  //hardcode
         const int cStepsPerSweep=100;     //hardcode
@@ -2357,25 +2361,25 @@ int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb 
         for(int i=0;i<cStepsPerSweep;++i) {
                 const uint32_t ind=pcg32_boundedrand_r(rng,N);
                 if(c[ind].su==-1) {      //not in solute: cluster move
-                        const int tmp=clusterMove(c,tc,s,E,ind,ewald,p,rng,myerr);
-                        if(tmp>0) ++nmoves[4];
+                        const int nInCluster=clusterMove(c,tc,s,E,ind,ewald,p,coreNum,rng,myerr);
+                        if(nInCluster>0) ++nmoves[4];
                         ++nmoves[5];
-                        if(i%cStepsPerSweep==0) fprintf(mvstats,"%d\n",tmp);
+                        if(i%cStepsPerSweep==0) fprintf(mvstats,"%d\n",nInCluster);
                 }
                 else {                   //in solute: solute move
                         const double roll=(double)pcg32_random_r(rng)/UINT32_MAX;
                         if(roll<=s[c[ind].su].mvProb) {
-                                const int tmp=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff,p,rng,myerr);
-                                nmoves[2]+=tmp;
+                                const int mvSuccess=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff,p,coreNum,rng,myerr);
+                                if(mvSuccess>0) ++nmoves[2];
                                 ++nmoves[3];
                         }
                 }
         }
         double* chg=checkCharge(c,N,NULL);
-        extern int nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        const int delPlus=chg[0]-nPlusSvSites;
-        const int delMinus=chg[1]-nMinusSvSites;
-        const int delZero=chg[2]-nZeroSvSites;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
+        const int delPlus=chg[0]-nPlusSvSites[coreNum];
+        const int delMinus=chg[1]-nMinusSvSites[coreNum];
+        const int delZero=chg[2]-nZeroSvSites[coreNum];
         if(delPlus!=0 || delMinus!=0 || delZero!=0) {
                 fprintf(myerr,"MCstep_cluster: delPlus:%d delMinus:%d delZero:%d ; move refused\n",delPlus,delMinus,delZero);
         }
@@ -2393,7 +2397,7 @@ int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb 
 //-put config onto lattice
 //-calc & output E
 //cleanup
-void runSpoof(lattice c, su s, double** ewald, para p, umb u, FILE* f, FILE* myout) {
+void runSpoof(lattice c, su s, double* ewald, para p, umb u, FILE* f, FILE* myout) {
         int nlines,nchars;
         const int niter=prepForReadTrj(&nlines,&nchars,f);
         extern int N;
@@ -2402,37 +2406,20 @@ void runSpoof(lattice c, su s, double** ewald, para p, umb u, FILE* f, FILE* myo
         assert(lines!=NULL && linesHolder!=NULL /*malloc*/);
         *lines=linesHolder;
         
-        //extern FILE* myout;
-        #if EXPAND_E
-        fprintf(myout,"#step\tE_tot\tE_i\tE_u\tE_c.fft\tE_c.tot\n");
-        #endif
-        #if !EXPAND_E
-        fprintf(myout,"#step\tenergy\n");
-        #endif
-
+        fprintf(myout,"#step\tE_tot\tE_isvsv\tE_isvsu\tE_isusu\tE_csrsvsv\tE_csrsvsu\tE_csrsusu\tE_clr\tE_ihh\tE_isvh\tE_isuh\tE_umb\tE_self\n");
         for(int i=0;i<niter;++i) {
                 const int ncharsPerIter=readTrjStep(&lines,linesHolder,f);
-                trjStepToLat(c,lines);
-                #if EXPAND_E
+                fitrjStepToLat(c,lines);
+                //lammpstrjStepToLat(c,lines);
 
-                const double en_i=energy_ising_full(c,s,NULL,p);
-                const double en_c=energy_coul_full(c,ewald,p)-p->e_self;
-                const double en_u=energy_umbr(u);
-                #if FFT_ON
-                const double en_cfft=(p->Q)*energy_lr(c,ewald);
-                fprintf(myout,"%d\t%f\t%f\t%f\t%f\t%f\n",i,en_i+en_c+en_u,en_i,en_u,en_cfft,en_c);
-                #endif
-                #if !FFT_ON
-                fprintf(myout,"%d\t%f\t%f\t%f\t%f\t%f\n",i,en_i+en_c+en_u,en_i,en_u,0.0,en_c);
-                #endif
-
-                #endif
-                #if !EXPAND_E
-                const double en=energy_full(c,s,NULL,ewald,p)+energy_umbr(u)-p->e_self;
-                fprintf(myout,"%d\t%f\n",i,en);
-                #endif
+                double E[ENERGY_LENGTH];
+                energy_full(c,s,E,ewald,p);
+                const double eUmb=energy_umbr(u);
+                const double eSelf=-p->e_self;
+                fprintf(myout,"%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",i,E[0]+E[1]+E[2]+E[3]+E[4]+E[5]+E[6]+E[7]+E[8]+E[9]+eUmb+eSelf,E[0],E[1],E[2],E[3],E[4],E[5],E[6],E[7],E[8],E[9],eUmb,eSelf);
         }
-        free(linesHolder);      free(lines);
+        free(linesHolder);
+        free(lines);
 }
 
 int prepForReadTrj(int* nlines, int* nchars, FILE* f) {
@@ -2461,7 +2448,7 @@ int prepForReadTrj(int* nlines, int* nchars, FILE* f) {
         int Ltrj[d];
         int i=0;
         while(fgets(buf,lbuf,f) != NULL) {
-                if(i==3)               assert(N!=atoi(buf) /*diff. inp N and trj N*/);
+                if(i==3) assert(N==atoi(buf) /*diff. inp N and trj N*/);
                 else if(i>=5 && i<5+d) Ltrj[i-5]=atoi(buf+2);
                 else if(i==5+d) {
                         int ct=0;
@@ -2514,13 +2501,32 @@ int findSpace(char* s, int spaceNum) {
         return -1;
 }
 
-//assumes .trj is in row-major order;
+//assumes .lammpstrj is in row-major order;
 //dumpLammps() outputs in this order
-void trjStepToLat(lattice c, char** lines) {
+void lammpstrjStepToLat(lattice c, char** lines) {
         extern int N;
         for(int i=0;i<N;++i) {
                 const int j=findSpace(lines[i],1);
                 const double v=atof(lines[i]+j);
                 *c[i].val = (v==1.0) ? v : -1.0;
+        }
+}
+
+//assumes .fitrj is in row-major order;
+//dumpLammps() outputs in this order
+void fitrjStepToLat(lattice c, char** lines) {
+        extern int N;
+        for(int i=0;i<N;++i) {
+                const int j=findSpace(lines[i],1);
+                const double v=atoi(lines[i]+j);
+                if(v==0) {
+                        *c[i].val=-1.0;
+                }
+                else if (v==1) {
+                        *c[i].val=1.0;
+                }
+                else if (v==2) {
+                        *c[i].val=0.0;
+                }
         }
 }

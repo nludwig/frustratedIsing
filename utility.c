@@ -39,34 +39,6 @@ void swapD(double* a, double* b) {
         *b=t;
 }
 
-// supporting function for qsortMult
-// adapted from K&R page 120
-void swapMultD(double** v, int narr, int L, int a, int b) {
-        assert(a<L && b<L);
-        double tmp;
-        for(int i=0;i<narr;++i) {
-                tmp=v[i][a];
-                v[i][a]=v[i][b];
-                v[i][b]=tmp;
-                return;
-        }
-}
-
-// qsort multiple arrays of same length based on the first array
-// adapted from K&R page 120
-void qsortMult(double** v, int narr, int L, int l, int r, int (*comp)(double*, double*)) {
-        int i, last;
-        if(l>=r) return;
-        swapMultD(v,narr,L,l,(l+r)/2);
-        last=l;
-        for(i=l+1;i<=r;++i) {
-                if((*comp)(v[i],v[l]) < 0) swapMultD(v,narr,L,++last,i);
-        }
-        swapMultD(v,narr,L,l,last);
-        qsortMult(v,narr,L,l,last-1,comp);
-        qsortMult(v,narr,L,last+1,r,comp);
-}
-
 void freeAll(void** ptrs, int l) {
         for(int i=0;i<l;++i) {
                 free(ptrs[i]);
@@ -84,7 +56,7 @@ uint16_t ndigits(long int num) {
         if(num<0l)  num*=-1l;
         const uint32_t n=(uint32_t)num;
         uint32_t pow=1u,ndigits=1u;
-        while(n>9u*pow) {
+        while(n>=10u*pow) {
                 pow*=10u;
                 ++ndigits;
         }
@@ -97,10 +69,6 @@ int iCmp(int* a, int* b) {
 
 int lattCmp(lattice* a, lattice* b) {
         return ( *(lattice*)a > *(lattice*)b ) - ( *(lattice*)a < *(lattice*)b );
-}
-
-int lattCmpRev(lattice* a, lattice* b) {
-        return  ( *(lattice*)a < *(lattice*)b ) - ( *(lattice*)a > *(lattice*)b );
 }
 
 int uint32_tCmp(uint32_t* a, uint32_t* b) {
@@ -142,32 +110,62 @@ int intArrMax(int* a, int l) {
         return m;
 }
 
+void allocGlobalNSiteArrays(int** nPlusSvSites, int** nMinusSvSites, int** nZeroSvSites,
+                            int** nPlusSuSites, int** nMinusSuSites, int** nHydrSuSites,
+                            double** totSvPlus, double** totSvMinus, double** totSuPlus,
+                            double** totSuMinus, int nCores) {
+        *nPlusSvSites=malloc(nCores*sizeof(**nPlusSvSites));
+        *nMinusSvSites=malloc(nCores*sizeof(**nMinusSvSites));
+        *nZeroSvSites=malloc(nCores*sizeof(**nZeroSvSites));
+        *nPlusSuSites=malloc(nCores*sizeof(**nPlusSuSites));
+        *nMinusSuSites=malloc(nCores*sizeof(**nMinusSuSites));
+        *nHydrSuSites=malloc(nCores*sizeof(**nHydrSuSites));
+        *totSvPlus=malloc(nCores*sizeof(**totSvPlus));
+        *totSvMinus=malloc(nCores*sizeof(**totSvMinus));
+        *totSuPlus=malloc(nCores*sizeof(**totSuPlus));
+        *totSuMinus=malloc(nCores*sizeof(**totSuMinus));
+        assert(*nPlusSvSites!=NULL && *nMinusSvSites!=NULL && *nZeroSvSites!=NULL && \
+               *nPlusSuSites!=NULL && *nMinusSuSites!=NULL && *nHydrSuSites!=NULL && \
+               *totSvPlus!=NULL && *totSvMinus!=NULL && *totSuPlus!=NULL && *totSuMinus!=NULL);
+}
+
 /*******************************/
 /****** lattice related   ******/
 /*******************************/
 
-void getPos(int n, int* pos, int* L_in) {
-        if(L_in==NULL) {
-                extern int* L;
-                L_in=L;
+int** setupPos() {
+        extern int N,d;
+        assert(d==3);
+        extern int* L;
+        int* posArrHolder=malloc(N*d*sizeof(*posArrHolder));
+        int** posArray=malloc(N*sizeof(*posArray));
+        assert(posArrHolder!=NULL && posArray!=NULL);
+        int i=0;
+        for(int x=0;x<L[0];++x) {
+                for(int y=0;y<L[1];++y) {
+                        for(int z=0;z<L[2];++z) {
+                                posArray[i]=posArrHolder+i*d;
+                                posArray[i][0]=x;
+                                posArray[i][1]=y;
+                                posArray[i][2]=z;
+                                ++i;
+                        }
+                }
         }
+        return posArray;
+}
+
+void getPos(int n, int* pos) {
         extern int d;
-        int prod=1;
-        n+=1; //req.d to work
-        for(int e=0;e<d;++e) prod*=L_in[e];
+        extern int** posArr;
         for(int e=0;e<d;++e) {
-                prod/=L_in[e];
-                int i=0;
-                while(i*prod < n) ++i;
-                --i;    //go one too far
-                pos[e]=i;
-                n-=i*prod;
+                pos[e]=posArr[n][e];
         }
 }
 
 void getPosLat(lattice c, lattice cn, int* pos) {
         const int n=(int)(cn-c);
-        getPos(n,pos,NULL);
+        getPos(n,pos);
 }
 
 int getSite(int* pos, int* L_in) {
@@ -189,19 +187,19 @@ int getSite(int* pos, int* L_in) {
         return n;
 }
 
-int getSitePBC(int* pos, int* L_in) {
+int getWrappedSite(int* pos, int* L_in) {
         wrapIntoL(pos,L_in);
         return getSite(pos,L_in);
 }
 
 lattice getSiteLat(lattice c, int* pos) {
-        return c+getSitePBC(pos,NULL);
+        return c+getWrappedSite(pos,NULL);
 }
 
 int getNN(int ind, int e, int* L_in) {
         extern int d;
         int nnpos[d];
-        getPos(ind,nnpos,L_in);
+        getPos(ind,nnpos);
         int sign=1;
         if(e<0) {
                 e=-1*e-1;       //[-d,-1] are negative directions of [0,d): -1:0; -2:1; ... -d:(d-1)
@@ -212,57 +210,55 @@ int getNN(int ind, int e, int* L_in) {
         return nn;
 }
 
-int getNNPBC(int ind, int e, int* L_in) {
+int getWrappedNN(int ind, int e, int* L_in) {
         extern int d;
         int nnpos[d];
-        getPos(ind,nnpos,L_in);
+        getPos(ind,nnpos);
         int sign=1;
         if(e<0) {
                 e=-1*e-1;       //[-d,-1] are negative directions of [0,d): -1:0; -2:1; ... -d:(d-1)
                 sign=-1;
         }
         nnpos[e]+=sign;
-        int nn=getSitePBC(nnpos,L_in);
+        int nn=getWrappedSite(nnpos,L_in);
         return nn;
 }
 
 lattice getNNLat(lattice c, int ind, int e) {
-        return c+getNNPBC(ind,e,NULL);
+        return c+getWrappedNN(ind,e,NULL);
 }
 
-void setCharge(lattice c) {
-        extern int N,nPlusSvSites,nMinusSvSites,nZeroSvSites;
-        extern int nPlusSuSites,nMinusSuSites,nHydrSuSites;
-        extern double totSvPlus,totSvMinus;
-        extern double totSuPlus,totSuMinus;
-        nPlusSvSites=nMinusSvSites=nZeroSvSites=0;
-        nPlusSuSites=nMinusSuSites=nHydrSuSites=0;
-        totSvPlus=totSvMinus=0.0;
-        totSuPlus=totSuMinus=0.0;
+void setCharge(lattice c, int coreNum) {
+        extern int N;
+        extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
+        extern double *totSvPlus,*totSvMinus,*totSuPlus,*totSuMinus;
+        nPlusSvSites[coreNum]=nMinusSvSites[coreNum]=nZeroSvSites[coreNum]=0;
+        nPlusSuSites[coreNum]=nMinusSuSites[coreNum]=nHydrSuSites[coreNum]=0;
+        totSvPlus[coreNum]=totSvMinus[coreNum]=totSuPlus[coreNum]=totSuMinus[coreNum]=0.0;
         for(int i=0;i<N;++i) {
                 if(c[i].su==-1) {
                         if(*c[i].val>0.0) {
-                                ++nPlusSvSites;
-                                totSvPlus+=*c[i].val;
+                                ++nPlusSvSites[coreNum];
+                                totSvPlus[coreNum]+=*c[i].val;
                         }
                         else if(*c[i].val<0.0) {
-                                ++nMinusSvSites;
-                                totSvMinus+=*c[i].val;
+                                ++nMinusSvSites[coreNum];
+                                totSvMinus[coreNum]+=*c[i].val;
                         }
-                        else ++nZeroSvSites;
+                        else ++nZeroSvSites[coreNum];
                 }
                 else {
                         if(c[i].hydrophobic==false) {
                                 if(*c[i].val>0.0) {
-                                        ++nPlusSuSites;
-                                        totSuPlus+=*c[i].val;
+                                        ++nPlusSuSites[coreNum];
+                                        totSuPlus[coreNum]+=*c[i].val;
                                 }
                                 else if(*c[i].val<0.0) {
-                                        ++nMinusSuSites;
-                                        totSuMinus+=*c[i].val;
+                                        ++nMinusSuSites[coreNum];
+                                        totSuMinus[coreNum]+=*c[i].val;
                                 }
                         }
-                        else ++nHydrSuSites;
+                        else ++nHydrSuSites[coreNum];
                 }
         }
 }
@@ -326,7 +322,7 @@ double* checkCharge(lattice c, int lc, double* ret) {
 para copyPara(para p) {
         para pNew=malloc(1*sizeof(*pNew));
         assert(pNew!=NULL /*malloc*/);
-//as of 181010:
+//as of 190418:
 //struct parameters {
 //        double J;
 //        double Q;
@@ -356,18 +352,25 @@ para copyPara(para p) {
 /********  bc related   ********/
 /*******************************/
 
-//double pbc(double dst, int e)
-//{
-//        extern int* L;
-//        dst -= L[e] * round(dst / L[e]);
-//        return dst;
-//}
-
 double pbc(double dst, int e) {
         extern int* L;
         while(dst<-L[e]/2) dst+=L[e];
         while(dst>=L[e]/2) dst-=L[e];
         return dst;
+}
+
+void minImageVect(int* pos, int* L_in) {
+        if(L_in==NULL) {
+                extern int* L;
+                L_in=L;
+        }
+        extern int d;
+        extern int* bc;
+        for(int e=0;e<d;++e) {
+                //assert(bc[2*e]==1 || bc[2*e+1]==1 /*wrapIntoL: bc.s must be set*/);
+                while(pos[e]<-L_in[e]/2) pos[e]+=L_in[e];
+                while(pos[e]>=L_in[e]/2) pos[e]-=L_in[e];
+        }
 }
 
 void wrapIntoL(int* pos, int* L_in) {
@@ -378,12 +381,9 @@ void wrapIntoL(int* pos, int* L_in) {
         extern int d;
         extern int* bc;
         for(int e=0;e<d;++e) {
-                if(pos[e]>=0 && pos[e]<L_in[e]) continue;
-                assert(bc[2*e]==1 || bc[2*e+1]==1 /*wrapIntoL: bc.s must be set*/);
+                //assert(bc[2*e]==1 || bc[2*e+1]==1 /*wrapIntoL: bc.s must be set*/);
                 while(pos[e]<0)        pos[e]+=L_in[e];
                 while(pos[e]>=L_in[e]) pos[e]-=L_in[e];
-                assert(pos[e]>=0 /*wrapIntoL: pos still out of (below) box*/);
-                assert(pos[e]<L_in[e] /*wrapIntoL: pos still out of (above) box*/);
         }
 }
 
@@ -426,25 +426,12 @@ double dist_vect(double* u, double* v) {
         return sqrt(r);
 }
 
-//dr must have d entries
-void diff_lat(double* dr, int i, int j) {
-        extern int d;
-        int u[d];
-        int v[d];
-        getPos(i,u,NULL);
-        getPos(j,v,NULL);
-        for(int e=0;e<d;++e) {
-                dr[e]=(double)(u[e]-v[e]);
-                dr[e]=pbc(dr[e],e);
-        }
-}
-
 double dist_lat(int i, int j) {
         extern int d;
         int u[d];
         int v[d];
-        getPos(i,u,NULL);
-        getPos(j,v,NULL);
+        getPos(i,u);
+        getPos(j,v);
         double ud[d];
         double vd[d];
         for(int e=0;e<d;++e) {
@@ -453,4 +440,26 @@ double dist_lat(int i, int j) {
         }
         const double r=dist_vect(ud,vd);
         return r;
+}
+
+bool isClose_nearZero(double a, double b) {
+        const double relTol=1e-9;
+        const double absTol=1e-8;
+        return isClose(a,b,relTol,absTol);
+}
+
+bool isClose_notNearZero(double a, double b) {
+        const double relTol=1e-9;
+        const double absTol=0.0;
+        return isClose(a,b,relTol,absTol);
+}
+
+bool isClose(double a, double b, double relTol, double absTol) {
+        const double aa=fabs(a);
+        const double ab=fabs(b);
+        const double mab=aa>ab ? aa : ab;
+        const double rhs=relTol*mab>absTol ? relTol*mab : absTol;
+        const double aamb=abs(a-b);
+        if(aamb<=rhs) return true;
+        else          return false;
 }

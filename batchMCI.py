@@ -379,7 +379,7 @@ class JobLauncher:
           print('{}'.format(l),file=f)
 
   #lines,jobN,pfixi,rnList,execInParentDir,rotation,data,N,lStr,sigma,ewaldIn,sweepsMult,kTeff,enFreq,dumpFreq,dataFreq,suComFreq,umbrFreq,eSteps,pSteps,neutralOverall
-  def makeSbatch(self,lines,jobN,ospfixi,rnList,execInParentDir,data,wpfixi,sweepsMult,kTeff):
+  def makeSbatch(self,lines,jobN,ospfixi,rnList,execInParentDir,data,wpfixi,sweepsMult,kTeff,umbrR=None):
     ewaldIn='../'+self.ewaldIn if execInParentDir is True else self.ewaldIn
     #prep
     rnStr=''
@@ -415,6 +415,8 @@ class JobLauncher:
       else:
         paraVal+=oldwpfix[i]+'.para,'
     paraVal=paraVal.rstrip(',')
+    if umbrR is not None:
+      paraVal='{}-{}'.format(umbrR,paraVal)
     if data is not None:
       dataVal=data
     else:
@@ -446,12 +448,11 @@ class JobLauncher:
           l=lines[i]
         print('{}'.format(l),file=f)
   
-      cmd='./MCIsingFIv27 1 0 {} {} {} {} {:.4f} {} {} {} {} {} {} {} {} {} {} {} {} {} {}'.format(self.neutralOverall,self.rotation,self.N,self.lStr,self.sigma,self.ewaldIn,paraVal,dataVal,sweepsMult,kTeff,self.enFreq,self.dumpFreq,self.dataFreq,self.suComFreq,self.umbrFreq,self.eSteps,self.pSteps,rnStr,lammpsVal)
+      cmd='./MCIsingFIv28_icc_sa 1 0 {} {} {} {} {:.4f} {} {} {} {} {} {} {} {} {} {} {} {} {} {}'.format(self.neutralOverall,self.rotation,self.N,self.lStr,self.sigma,self.ewaldIn,paraVal,dataVal,sweepsMult,kTeff,self.enFreq,self.dumpFreq,self.dataFreq,self.suComFreq,self.umbrFreq,self.eSteps,self.pSteps,rnStr,lammpsVal)
       if execInParentDir is True:
         cmd='.'+cmd
       print('{}'.format(cmd),file=f)
     return o
-
 
   def submitBatchLoop(self,nWorkers,umbrR,jobNStart,jobIterations,jobMax,dataIn,lines,seeds,execInParentDir,sweepsMultByOS,kTeffByOS,maxCpuPerNode):
     wpfix=self.makeWorkersOutPfx()
@@ -499,7 +500,7 @@ class JobLauncher:
           continue
   
         makeSbatchArgList=lambda d: [lines,jobN,ospfixi,seeds[i][jobN-jobNStart],\
-                execInParentDir,d,wpfixByOS[i],sweepsMultByOS[i],kTeffByOS[i]]
+                execInParentDir,d,wpfixByOS[i],sweepsMultByOS[i],kTeffByOS[i],umbrR]
 
         print('in loop, handing makeSbatch wpfixByOSi:{}'.format(wpfixByOS[i]))
         if jobN!=jobNStart:
@@ -522,64 +523,6 @@ class JobLauncher:
         #sp.call(sbatchcall)
         slurmJNum=sp.check_output(sbatchcall).split()
         slurmJNum=int(slurmJNum[-1])    #slurm output: "blah blah <job #>"
-
-
-
-
-
-    #opfix=self.makeWorkersOutPfx()
-    #for i in opfix:
-    #  print('{}'.format(i))
-    #for index in range(0,nWorkers):
-    #  pfixi=opfix[index]
-    #  print(pfixi)
-    #  if self.name is not None:
-    #    pfixi='{}-{}'.format(self.name,pfixi)
-    #  if umbrR is not None:
-    #    pfixi='{}-{}'.format(umbrR,pfixi)
-  
-    #  N,Nm=findRecentDep('/home/nickludwig/bashScripts/sqn.sh',[pfixi],col=3,ret=0)
-    #  if N==-1:
-    #    jobNStart,Nm=findRecentDep('ls',[pfixi,'.data'],disqual='_')
-    #    Nm=Nm[:-5]
-    #  else:
-    #    i=-1
-    #    while Nm[i]!='-':   i-=1
-    #    jobNStart=int(Nm[i+1:])
-    #  jobNStart+=1
-    #  if N!=-1: slurmJNum=N
-    #  else:     slurmJNum=None
-    #  for jobN in range(jobNStart,jobNStart+jobIterations):
-    #    print('jobN:{}\tjobNStart:{}\tjobMax\tdataIn:{}\tNm:{}'.format(jobN,jobNStart,jobMax,dataIn,Nm))
-    #    if jobN>=jobMax:
-    #      print('jobN>=jobMax; skipping')
-    #      continue
-  
-    #    def makeSbatchArgList(data):
-    #      return [lines,jobN,pfixi,seeds[index][jobN-jobNStart],
-    #              execInParentDir,rotation,data]
-    #    if jobN!=jobNStart:
-    #      o=makeSbatch(*makeSbatchArgList(None))
-    #    else:
-    #      if dataIn is not None:
-    #        o=makeSbatch(*makeSbatchArgList(dataIn))
-    #      elif Nm!='':
-    #        o=makeSbatch(*makeSbatchArgList(Nm+'.data'))
-    #      else:
-    #        o=makeSbatch(*makeSbatchArgList('none'))
-  
-    #    if slurmJNum is not None:
-    #      sbatchcall='sbatch --dependency=afterok:{} {}'.format(slurmJNum,o)
-    #    else:
-    #      sbatchcall='sbatch {}'.format(o)
-  
-    #    print('submitting: {}'.format(sbatchcall))
-    #    sbatchcall=shlex.split(sbatchcall)
-    #    #sp.call(sbatchcall)
-    #    slurmJNum=sp.check_output(sbatchcall).split()
-    #    slurmJNum=int(slurmJNum[-1])    #slurm output: "blah blah <job #>"
-  
-
 
 def main():
   err=sys.stderr
@@ -635,6 +578,9 @@ def main():
     lines=[line.strip() for line in f]
   nlines=len(lines)
 
+  if umbrR is not None:
+    paraIn='../'+paraIn
+    ewaldIn='../'+ewaldIn
   jl=JobLauncher(N,Nsu,name,var,varkeys,paraIn,umbrK,
                  rotation,lStr,sigma,ewaldIn,enFreq,dumpFreq,
                  dataFreq,suComFreq,umbrFreq,eSteps,pSteps,neutralOverall)

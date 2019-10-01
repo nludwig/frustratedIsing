@@ -1,12 +1,13 @@
 CC = icc
-CCFLAGS = -O3 -xHost -std=c99 -qopenmp
+#CCFLAGS = -O0 -g -xHost -std=c11 -qopenmp
+CCFLAGS = -O3 -xHost -std=c11 -qopenmp
 #CC = gcc
-#CCFLAGS = -O3 -march=native -mtune=native -std=c99 -fopenmp
+#CCFLAGS = -O3 -march=native -mtune=native -std=c11 -fopenmp
 OBJ = main.o MCIcore.o io.o pcg_basic.o utility.o shapes.o energy.o forRandOrder.o
 LFLAGS = -lfftw3 -lm
 
 MCIsingFI : $(OBJ)
-	$(CC) $(CCFLAGS) $(OBJ) $(LFLAGS) -o MCIsingFIv27
+	$(CC) $(CCFLAGS) $(OBJ) $(LFLAGS) -o MCIsingFIv30
 main.o : main.c headerBundle.h
 	$(CC) $(CCFLAGS) -c main.c $(LFLAGS)
 MCIcore.o : MCIcore.c MCIcore.h
@@ -24,4 +25,4 @@ energy.o : energy.c energy.h
 forRandOrder.o : forRandOrder.c forRandOrder.h
 	$(CC) $(CCFLAGS) -c forRandOrder.c $(LFLAGS)
 clean :
-	rm MCIsingFIv27 $(OBJ)
+	rm MCIsingFIv30 $(OBJ)

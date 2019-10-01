@@ -1,20 +1,20 @@
-/* sections (160524)
+/* sections (190425)
  * INPUTS
  * SOLUTE
  * LATTICE
  * SPOOF?
- * EQUILIBRATION
- * PRODUCTION
+ * SWAP MOVES
+ * CLUSTER MOVES
  */
 
 #include "headerBundle.h"
 
 // DEFINING EXTERNAL VAR.S
 double pi=0;
-double totSvPlus=0.0;
-double totSvMinus=0.0;
-double totSuPlus=0.0;
-double totSuMinus=0.0;
+double* totSvPlus=NULL;
+double* totSvMinus=NULL;
+double* totSuPlus=NULL;
+double* totSuMinus=NULL;
 double plusCharge=1.0;
 double minusCharge=-1.0;
 int N=0;
@@ -23,17 +23,18 @@ int Ntotsusites=0;
 int Nc=0;
 int d=0;
 int shlL=0;
-int nPlusSvSites=0;
-int nMinusSvSites=0;
-int nZeroSvSites=0;
-int nPlusSuSites=0;
-int nMinusSuSites=0;
-int nHydrSuSites=0;
+int* nPlusSvSites=NULL;
+int* nMinusSvSites=NULL;
+int* nZeroSvSites=NULL;
+int* nPlusSuSites=NULL;
+int* nMinusSuSites=NULL;
+int* nHydrSuSites=NULL;
 int types=2;    //hardcode for now (-1,+1); later add in 0 for (-1,0,+1)
 int inshlopt=0;
 bool hydrophobicExist=false;
 int* L=NULL; 
 int* bc=NULL;
+int** posArr=NULL;
 
 /*
 double* avg;
@@ -81,7 +82,7 @@ int main(int argc, char* argv[]) {
          */
         clock_t progStart=time(NULL);
 
-        const int totExtPtrs=10; //updating totptrs->totExtPtrs
+        const int totExtPtrs=12; //updating totptrs->totExtPtrs
         void* extPtrs[totExtPtrs];
         int nExtPtrs=0;
 
@@ -113,81 +114,24 @@ int main(int argc, char* argv[]) {
         char** lIn=NULL;
         int lDim=0;
         lIn=split(lInputStr,",",&lDim);
-        for(int e=0;e<lDim;++e) L[e]=atoi(lIn[e]);
+        for(int e=0;e<d;++e) L[e]=atoi(lIn[e]);
+        posArr=setupPos();
 
         extPtrs[nExtPtrs++]=L;
         extPtrs[nExtPtrs++]=bc;
         extPtrs[nExtPtrs++]=lIn;
+        extPtrs[nExtPtrs++]=*posArr;
+        extPtrs[nExtPtrs++]=posArr;
 
         const double sigma=atof(*(++argv));
 
-        //non-omp code arg reading and file loading
-        //FILE* readIn=fopen(*(++argv),"r");        //readIn parameters
-        //assert(readIn!=NULL /*fopen*/);
-        //if(verbose==1) fprintf(myerr,"main: opened parameter in file at %s\n",*(argv));
-        ////setup holders for parameters
-        //struct parameters parameterHolder;
-        //para p=&parameterHolder;
-        //initPara(p); //sets all parameters to 0 by default
-
-        //char*** linesByType=NULL;
-        //int* nLinesByType=readSetParameters(p, &linesByType, readIn);
-        //if(verbose==1) {
-        //        fprintf(myerr,"readSetPara: n+sv,n-sv,n0sv,n+su,n-su,nhsu:%d,%d,%d,%d,%d,%d\n",
-        //                nPlusSvSites,nMinusSvSites,nZeroSvSites,nPlusSuSites,nMinusSuSites,nHydrSuSites);
-        //}
-        //ptrs[nptrs++]=(void*)linesByType[1]; //hardcode: 1-> solutes
-        //ptrs[nptrs++]=(void*)linesByType[2]; //hardcode: 2-> umbrellas
-        //if(nLinesByType[0]>=1) assert(nLinesByType[1]!=-1 /*readSolutes fail code*/);
-        //assert(fclose(readIn)==0);
-        //readIn=NULL;
-        //ptrs[nptrs++]=(void*)L;
-        //ptrs[nptrs++]=(void*)bc;
-        //int datain;
-        //int ndatalines; char** datalines=NULL;   //used if reading in .data
-        //if(strcmp(*(++argv),"none") != 0) {
-        //        datain=1;
-        //        readIn=fopen(*(argv),"r");    //readIn .data
-        //        assert(readIn!=NULL /*fopen*/);
-        //        if(verbose==1) {
-        //                fprintf(myerr,"main: opened data in file at %s\n",*(argv));
-        //        }
-        //        ndatalines=readData(&datalines, readIn);
-        //        if(nLinesByType[0]>=1 && nLinesByType[1]==0) { //Solutes info in data lines
-        //                nLinesByType[1]=readLines("Solutes\n",&(linesByType[1]),datalines,ndatalines,(FILE*)NULL);
-        //        }
-        //        assert(fclose(readIn)==0);
-        //}
-        //else    datain=0;
-        //double sweepsMult=atof(*(++argv));
-        //double kTeff=atof(*(++argv));
-
-        //load ewald: shared
+        //grab ewald file name: shared
         FILE* ewaldIn=NULL;
         if(strcmp(*(++argv),"none") != 0) {
                 ewaldIn=fopen(*(argv),"r");
                 assert(ewaldIn!=NULL /*fopen*/);
                 if(verbose==1) fprintf(stderr,"main: opened data in ewald file at %s\n",*(argv));
         }
-        //omp ewald load
-        if(verbose==1) {
-                fprintf(stderr,"before ewald\n");
-                fflush(stderr);
-        }
-        double** ewald=NULL;
-        #if FFT_ON
-        if(ewaldIn!=NULL) {
-                loadEwaldChunks(&ewald,N,ewaldIn);
-                assert(fclose(ewaldIn)==0);
-        }
-        else {
-                setupEwald(&ewald,sigma);
-                assert(ewald!=NULL);
-        }
-        extPtrs[nExtPtrs++]=*ewald;
-        extPtrs[nExtPtrs++]=ewald;
-        #endif
-        if(verbose==1) fprintf(stderr,"ewald sucessfully loaded\n");
 
         //load para&data filenames, su move modifiers: private
         int nCoresP,nCoresD,nCoresS,nCoresK;
@@ -210,6 +154,29 @@ int main(int argc, char* argv[]) {
                 }
         }
         else nCoresD=nCoresP;
+
+        allocGlobalNSiteArrays(&nPlusSvSites,&nMinusSvSites,&nZeroSvSites,
+                               &nPlusSuSites,&nMinusSuSites,&nHydrSuSites,
+                               &totSvPlus,&totSvMinus,&totSuPlus,&totSuMinus,nCoresD);
+
+        //omp ewald load
+        double* ewald=NULL;
+        #if FFT_ON
+        if(verbose==1) {
+                fprintf(stderr,"before ewald\n");
+                fflush(stderr);
+        }
+        if(ewaldIn!=NULL) {
+                loadEwaldChunks(&ewald,N,ewaldIn);
+                assert(fclose(ewaldIn)==0);
+        }
+        else {
+                ewald=setupEwald(L,sigma,nCoresP);
+                assert(ewald!=NULL);
+        }
+        extPtrs[nExtPtrs++]=ewald;
+        if(verbose==1) fprintf(stderr,"ewald sucessfully loaded\n");
+        #endif
 
         char* sweepsMultInputStr=*(++argv);
         char** sweepsMultIn=NULL;
@@ -249,25 +216,23 @@ int main(int argc, char* argv[]) {
         // start RNG: get seeds; init
         int extltmp;
         char** rngSeeds=split(*(++argv), ",", &extltmp);
-        uint64_t rngseed=atoi(*rngSeeds);
-        uint64_t rngseq=atoi(*(rngSeeds+1));
+        //uint64_t rngseed=atoi(*rngSeeds);
+        //uint64_t rngseq=atoi(*(rngSeeds+1));
+        uint64_t rngseed=strtoul(*rngSeeds,NULL,10);
+        uint64_t rngseq=strtoul(*(rngSeeds+1),NULL,10);
         free(*rngSeeds);   free(rngSeeds);    rngSeeds=NULL;
         pcg32_random_t extRandomNumberGenerator;
         pcg32_random_t* extRng=&extRandomNumberGenerator;
         pcg32_srandom_r(extRng,rngseed,rngseq);
-        //testRng(UINT32_MAX/32,rng);
         uint32_t threadRngSeeds[2*nCoresP];
         for(int ii=0;ii<2*nCoresP;++ii) threadRngSeeds[ii]=pcg32_random_r(extRng);
 
-        //#pragma omp parallel for schedule(guided) num_threads(nCoresP)
         #pragma omp parallel for num_threads(nCoresP)
         for(int ii=0;ii<nCoresP;++ii) {
                 const int totIntPtrs=39;
                 void* intPtrs[totIntPtrs];
                 int nIntPtrs=0;
 
-                //threadStart[ii]=time(NULL);
-                //threadStart[ii]=clock();
                 const int l=(int)strlen(fname[ii]);
                 char* prefix=malloc(l+1);
                 assert(prefix!=NULL /*malloc*/);
@@ -318,27 +283,33 @@ int main(int argc, char* argv[]) {
 
                 fprintf(myerr,"args:\n");
                 for(int i=0;i<argc;++i) fprintf(myerr,"%s ",*(argv-(argc-2)+i));
-                /******************************/
-                /* done w/ thread pre-startup */
-                /******************************/
+                fprintf(myerr,"\n");
+
+                // done w/ thread pre-startup
+
                 FILE* readIn=fopen(parasIn[ii],"r");        //readIn parameters
 
                 assert(readIn!=NULL /*fopen*/);
-                if(verbose==1) fprintf(myerr,"main: opened parameter in file at %s\n",*(argv));
+                if(verbose==1) {
+                        fprintf(myerr,"main: opened parameter in file at %s\n",parasIn[ii]);
+                        if(ii==0) {
+                                fprintf(stderr,"thread %d: opened parameter in file at %s\n",ii,parasIn[ii]);
+                        }
+                }
                 //setup holders for parameters
                 struct parameters parameterHolder;
                 para p=&parameterHolder;
                 initPara(p); //sets all parameters to 0 by default
 
                 char*** linesByType=NULL;
-                int* nLinesByType=readSetParameters(p,&linesByType,readIn,myerr);
+                int* nLinesByType=readSetParameters(p,&linesByType,ii,readIn,myerr);
                 if(p->sigma!=sigma) {
                         fprintf(stderr,"thread %d sigma differs from cmd line arg sigma: %f != %f\n",ii,p->sigma,sigma);
                         exit(1);
                 }
                 intPtrs[nIntPtrs++]=(void*)linesByType[1]; //hardcode: 1-> solutes
                 intPtrs[nIntPtrs++]=(void*)linesByType[2]; //hardcode: 2-> umbrellas
-                int isFluidNeutral=willParaLatBeChargeNeut();
+                int isFluidNeutral=willParaLatBeChargeNeut(ii);
                 if(isFluidNeutral==0) {
                         fprintf(myerr,"WARNING: pure fluid cannot be neutral with given inputs\n");
                 }
@@ -384,7 +355,10 @@ int main(int argc, char* argv[]) {
                         readIn=fopen(datasIn[ii],"r");    //readIn .data
                         assert(readIn!=NULL /*fopen*/);
                         if(verbose==1) {
-                                fprintf(myerr,"main: opened data in file at %s\n",*(argv));
+                                fprintf(myerr,"main: opened data in file at %s\n",datasIn[ii]);
+                                if(ii==0) {
+                                        fprintf(stderr,"thread %d: opened data in file at %s\n",ii,datasIn[ii]);
+                                }
                         }
                         ndatalines=readData(&datalines, readIn);
                         if(nLinesByType[0]>=1 && nLinesByType[1]==0) { //Solutes info in data lines
@@ -437,11 +411,9 @@ int main(int argc, char* argv[]) {
                         intPtrs[nIntPtrs++]=(void*)suCurrPosBlock;
                         intPtrs[nIntPtrs++]=(void*)inShlCurrPosBlock;
                         intPtrs[nIntPtrs++]=(void*)hydrH;
-                        if(verbose==1) {
-                                fprintf(myerr,"hydrophobic sites exist on lattice: ");
-                                if(hydrophobicExist==true) fprintf(myerr,"true\n");
-                                else                       fprintf(myerr,"false\n");
-                        }
+                }
+                if(ii==0) {
+                        fprintf(stderr,"thread %d: loaded su\n",ii);
                 }
 
                 //umbrella sampling?
@@ -480,6 +452,9 @@ int main(int argc, char* argv[]) {
                 free(nLinesByType);
                 linesByType=NULL;
                 nLinesByType=NULL;
+                if(ii==0) {
+                        fprintf(stderr,"thread %d: loaded umb\n",ii);
+                }
 
                 //setup suComOut if suComFreq != 0
                 char* mySuComOutName=NULL;
@@ -507,7 +482,7 @@ int main(int argc, char* argv[]) {
                 /***************************************************************/
                 /*********************** LATTICE *******************************/
                 /***************************************************************/
-                fprintf(myerr,"\nrngseed,seq: %u,%u\n",threadRngSeeds[ii],threadRngSeeds[ii+nCoresP]);
+                fprintf(myerr,"\nrngseed,seq: %lu,%lu\n",threadRngSeeds[ii],threadRngSeeds[ii+nCoresP]);
                 pcg32_random_t randomNumberGenerator;
                 pcg32_random_t* rng=&randomNumberGenerator;
                 pcg32_srandom_r(rng,threadRngSeeds[ii],threadRngSeeds[ii+nCoresP]);
@@ -523,11 +498,17 @@ int main(int argc, char* argv[]) {
                 if(verbose==1) fprintf(myerr,"got past lat mallocs\n");
                 fprintf(myerr,"before setLatNeigh\n");
                 fflush(myerr);
+                if(ii==0) {
+                        fprintf(stderr,"thread %d: before setting neighbors\n",ii);
+                }
                 void** tmpptrs=setLatNeigh_coul_twoway(lat,p,myerr);
                 assert(tmpptrs!=NULL /*setLatNeigh_coul_twoway fail*/);
                 for(int i=0;i<2;++i) intPtrs[nIntPtrs++]=tmpptrs[i];
                 free(tmpptrs);  tmpptrs=NULL;
-                
+                if(ii==0) {
+                        fprintf(stderr,"thread %d: finished setting neighbors\n",ii);
+                }
+
                 //fprintf(myerr,"before test_simpCubic\n");
                 //fflush(myerr);
                 //if(p->fftOn==1) { //setLatVal_simpCubic resets nPlusSites,...
@@ -545,88 +526,131 @@ int main(int argc, char* argv[]) {
                 //totSvPlus=0.0;
                 //totSvMinus=0.0;
                 //setCharge(lat);
-                if(strcmp(spoofIn,"0")==0) {
-                        if(datain==1) {
-                                double* chg=setLatVal_data(lat, datalines, ndatalines,myerr);
-                                free(*datalines);   free(datalines);    datalines=NULL;
-                                free(chg);
-                                fprintf(myerr,"\n\nloaded config:\n");
-                                if(outputStyleFI==true) dumpFI(lat,solutes,0,myerr,myerr);
-                                else                    dumpLammps(lat,solutes,0,myerr,myerr);
-                                fprintf(myerr,"\n\n");
-                        }
-                        else {
-                                double* chg=setLatVal_rand(lat,rng,myerr);
-                                free(chg);
+
+                double* chg=NULL;
+                if(datain==1) {
+                        chg=setLatVal_data(lat,datalines,ndatalines,ii,myerr);
+                        free(*datalines);   free(datalines);    datalines=NULL;
+                        fprintf(myerr,"\n\nloaded config:\n");
+                        if(ii==0) {
+                                fprintf(stderr,"\n\nthread %d: loaded config\n",ii);
                         }
                 }
+                else {
+                        chg=setLatVal_rand(lat,solutes,ii,rng,myerr);
+                        fprintf(myerr,"\n\nbuilt config:\n");
+                        if(ii==0) {
+                                fprintf(stderr,"\n\nthread %d: built config\n",ii);
+                        }
+                }
+                free(chg);
+                //if(outputStyleFI==true) dumpFI(lat,solutes,0,myerr,myerr);
+                //else                    dumpLammps(lat,solutes,0,myerr,myerr);
+                //fprintf(myerr,"\n\n");
 
-                lattice triallat=(lattice)malloc(N*sizeof(struct latticeSite));
+                //if(strcmp(spoofIn,"0")==0) {
+                //        if(datain==1) {
+                //                double* chg=setLatVal_data(lat, datalines, ndatalines,myerr);
+                //                free(*datalines);   free(datalines);    datalines=NULL;
+                //                free(chg);
+                //                fprintf(myerr,"\n\nloaded config:\n");
+                //                if(outputStyleFI==true) dumpFI(lat,solutes,0,myerr,myerr);
+                //                else                    dumpLammps(lat,solutes,0,myerr,myerr);
+                //                fprintf(myerr,"\n\n");
+                //        }
+                //        else {
+                //                double* chg=setLatVal_rand(lat,rng,myerr);
+                //                free(chg);
+                //        }
+                //}
+
+                lattice triallat=malloc(N*sizeof(*triallat));
                 assert(triallat!=NULL /*malloc*/);
                 intPtrs[nIntPtrs++]=(void*)triallat;
-                for(int i=0;i<N;++i) triallat[i].val=valBlock+i+N;
-                for(int i=0;i<N;++i) *triallat[i].val=*lat[i].val;
+                for(int i=0;i<N;++i) {
+                        triallat[i].val=valBlock+i+N;
+                        *triallat[i].val=*lat[i].val;
+                }
                 setLatInitSu(triallat); //set lat su values to -1: no su
                 tmpptrs=setLatNeigh_coul_twoway(triallat,p,myerr);
                 assert(tmpptrs != NULL /*setLatNeigh_coul_twoway fail*/);
                 for(int i=0;i<2;++i) intPtrs[nIntPtrs++]=tmpptrs[i];
                 if(Nsu!=0) {
+                        const uint64_t rngStateAtSuRelPosStart=rng->state;
+                        const uint64_t rngIncAtSuRelPosStart=rng->inc; //ensure c,tc same
                         int setSuRelPosRet;
-                        setSuRelPosRet=setSuRelPos(lat,solutes,inshlopt,neutralOverall,rng,myerr);
+                        setSuRelPosRet=setSuRelPos(lat,solutes,inshlopt,neutralOverall,ii,rng,myerr);
                         assert(setSuRelPosRet==0);
                         if(verbose==1) fprintf(myerr,"setSuRelPosRet for c: %d\n",setSuRelPosRet);
-                        setSuRelPosRet=setSuRelPos(triallat,trialsolutes,inshlopt,neutralOverall,rng,myerr);
+                        rng->state=rngStateAtSuRelPosStart;
+                        rng->inc=rngIncAtSuRelPosStart; //ensure c,tc same
+                        setSuRelPosRet=setSuRelPos(triallat,trialsolutes,inshlopt,neutralOverall,ii,rng,myerr);
                         assert(setSuRelPosRet==0);
                         if(verbose==1) {
                                 fprintf(myerr,"setSuRelPosRet for tc: %d\n",setSuRelPosRet);
                                 fflush(myerr);
                         }
                 }
+                else {
+                        for(int i=0;i<N;++i) {
+                                lat[i].hydrophobic=false;
+                                triallat[i].hydrophobic=false;
+                        }
+                }
+                hydrophobicExist=setHydrophobicExist(solutes);
+                if(verbose==1) {
+                        fprintf(myerr,"hydrophobic sites exist on lattice: ");
+                        if(hydrophobicExist==true) fprintf(myerr,"true\n");
+                        else                       fprintf(myerr,"false\n");
+                }
                 if(strcmp(spoofIn,"0")==0) {
                         if(verbose==1) {
-                                const int sumSv=nPlusSvSites+nMinusSvSites+nZeroSvSites;
-                                const double totSvChg=totSvPlus+totSvMinus;
-                                const double totSuChg=totSuPlus+totSuMinus;
+                                const int sumSv=nPlusSvSites[ii]+nMinusSvSites[ii]+nZeroSvSites[ii];
+                                const double totSvChg=totSvPlus[ii]+totSvMinus[ii];
+                                const double totSuChg=totSuPlus[ii]+totSuMinus[ii];
                                 fprintf(myerr,"main: init lat val.s set on lattice.\n"
                                               "nPlusSites,Minus,Zero: %d,%d,%d of %d solvent, %d sites.\n"
                                               "\tor %f,%f,%f per solvent\n"
                                               "\tor %f,%f,%f per SITE\n"
                                               "totSvChg,totSuChg,sum: %.1f,%.1f,%.1f\n",
-                                        nPlusSvSites,nMinusSvSites,nZeroSvSites,sumSv,N,(double)(nPlusSvSites)/sumSv,
-                                        (double)(nMinusSvSites)/sumSv,(double)(nZeroSvSites)/sumSv,(double)(nPlusSvSites)/N,
-                                        (double)(nMinusSvSites)/N,(double)(nZeroSvSites)/N,totSvChg,totSuChg,totSvChg+totSuChg);
+                                        nPlusSvSites[ii],nMinusSvSites[ii],nZeroSvSites[ii],sumSv,N,(double)(nPlusSvSites[ii])/sumSv,
+                                        (double)(nMinusSvSites[ii])/sumSv,(double)(nZeroSvSites[ii])/sumSv,(double)(nPlusSvSites[ii])/N,
+                                        (double)(nMinusSvSites[ii])/N,(double)(nZeroSvSites[ii])/N,totSvChg,totSuChg,totSvChg+totSuChg);
                                 fprintf(myout,"####################################\n");
                                 fflush(myerr);
                         }
-                        nPlusSvSites=0; //reset from input
-                        nMinusSvSites=0;
-                        nZeroSvSites=0;
-                        totSvPlus=0.0;
-                        totSvMinus=0.0;
-                        setCharge(lat);
+                        setCharge(lat,ii);
                         if(verbose==1) {
-                                const int sumSv=nPlusSvSites+nMinusSvSites+nZeroSvSites;
-                                const double totSvChg=totSvPlus+totSvMinus;
-                                const double totSuChg=totSuPlus+totSuMinus;
+                                const int sumSv=nPlusSvSites[ii]+nMinusSvSites[ii]+nZeroSvSites[ii];
+                                const double totSvChg=totSvPlus[ii]+totSvMinus[ii];
+                                const double totSuChg=totSuPlus[ii]+totSuMinus[ii];
                                 fprintf(myerr,"main: init lat val.s set on lattice.\n"
                                               "nPlusSites,Minus,Zero: %d,%d,%d of %d solvent, %d sites.\n"
                                               "\tor %f,%f,%f per solvent\n"
                                               "\tor %f,%f,%f per SITE\n"
                                               "totSvChg,totSuChg,sum: %.1f,%.1f,%.1f\n",
-                                        nPlusSvSites,nMinusSvSites,nZeroSvSites,sumSv,N,(double)(nPlusSvSites)/sumSv,
-                                        (double)(nMinusSvSites)/sumSv,(double)(nZeroSvSites)/sumSv,(double)(nPlusSvSites)/N,
-                                        (double)(nMinusSvSites)/N,(double)(nZeroSvSites)/N,totSvChg,totSuChg,totSvChg+totSuChg);
+                                        nPlusSvSites[ii],nMinusSvSites[ii],nZeroSvSites[ii],sumSv,N,(double)(nPlusSvSites[ii])/sumSv,
+                                        (double)(nMinusSvSites[ii])/sumSv,(double)(nZeroSvSites[ii])/sumSv,(double)(nPlusSvSites[ii])/N,
+                                        (double)(nMinusSvSites[ii])/N,(double)(nZeroSvSites[ii])/N,totSvChg,totSuChg,totSvChg+totSuChg);
 
                                 fprintf(myout,"####################################\n");
                                 fflush(myerr);
                         }
                 }
+                fprintf(myerr,"post-su placement\n");
+                if(outputStyleFI==true) dumpFI(lat,solutes,0,myerr,myerr);
+                else                    dumpLammps(lat,solutes,0,ii,myerr,myerr);
+                fprintf(myerr,"\n\n");
+
+                ////set rng to same seed for testing
+                ////COMMENT THIS OUT FOR NORMAL RUNS
+                //const int testSeed=1;
+                //const int testSeq=2;
+                //pcg32_srandom_r(rng,testSeed,testSeq);
 
                 /***************************************************************/
                 /************************ SPOOF? *******************************/
                 /***************************************************************/
-                //190226: spoof code has not been updated for some time and may
-                //not work as expected
                 //"spoof" is an option to, rather than running a fresh simulation,
                 //read in the trajectory info. from a previously run simulation
                 //and output the energies of those config.s according to the
@@ -645,18 +669,25 @@ int main(int argc, char* argv[]) {
                 }
 
                 /***************************************************************/
-                /*********************** EQUILIBRATE ***************************/
+                /*********************** SWAP MOVES ****************************/
                 /***************************************************************/
                 
                 double energyHolder[ENERGY_LENGTH]; //hardcode
                 double* en=energyHolder;
                 energy_full(lat,solutes,en,ewald,p);
+
+                fprintf(myerr,"pre-run energy\n");
+                const double eUmb=energy_umbr(umbr);
+                const double eSelf=-p->e_self;
+                fprintf(myerr,"%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",        \
+                        0,en[0]+en[1]+en[2]+en[3]+en[4]+en[5]+en[6]+en[7]+en[8]+en[9]+eUmb+eSelf, \
+                        en[0],en[1],en[2],en[3],en[4],en[5],en[6],en[7],en[8],en[9],eUmb,eSelf     );
+
                 const int mvtypes=2*3;  //hardcode
                 int nmoves[mvtypes]; //hardcode
                 for(int i=0;i<mvtypes;++i) nmoves[i]=0;
                 int* mvtmp=NULL;
                 time_t equiStart = time(NULL);
-                //clock_t equiStart = clock();
                 FILE* dumpout=NULL;
 
                 //skip unnecessary code if equisteps == 0
@@ -688,12 +719,12 @@ int main(int argc, char* argv[]) {
                         for(int i=0;i<equiSteps;++i) {
                                 #if EQUI_INNER_DUMP
                                 mvtmp=MCstep_flipswap(lat,triallat,en,solutes,trialsolutes,umbr,tumbr,ewald,inshlopt,rotationOpt,sweepsMult,\
-                                                      kTeff,p,rng,enFreq,dumpFreq,suComFreq,umbrFreq,dataFreq,dumpout,prefix,i,outputStyleFI,\
-                                                      myout,myumbout,mySuComOut,myerr);
+                                                      kTeff,p,ii,rng,enFreq,dumpFreq,suComFreq,umbrFreq,dataFreq,dumpout,prefix,i,\
+                                                      outputStyleFI,myout,myumbout,mySuComOut,myerr);
                                 #endif
                                 #if !EQUI_INNER_DUMP
                                 mvtmp=MCstep_flipswap(lat,triallat,en,solutes,trialsolutes,umbr,tumbr,ewald,inshlopt,rotationOpt,sweepsMult,\
-                                                      kTeff,p,rng,myout,myumbout,mySuComOut,myerr);
+                                                      kTeff,p,ii,rng,myout,myumbout,mySuComOut,myerr);
                                 #endif
                                 for(int j=0;j<mvtypes;++j) nmoves[j]+=mvtmp[j];
                                 free(mvtmp);    mvtmp=NULL;
@@ -701,14 +732,14 @@ int main(int argc, char* argv[]) {
                                 if(i%enFreq==0) {
                                         const double eUmb=energy_umbr(umbr);
                                         const double eSelf=-p->e_self;
-                                        energy_full(lat,solutes,en,ewald,p);
+                                        //energy_full(lat,solutes,en,ewald,p);
                                         fprintf(myout,"%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",        \
                                                 i,en[0]+en[1]+en[2]+en[3]+en[4]+en[5]+en[6]+en[7]+en[8]+en[9]+eUmb+eSelf, \
                                                 en[0],en[1],en[2],en[3],en[4],en[5],en[6],en[7],en[8],en[9],eUmb,eSelf     );
                                 }
                                 if(dumpFreq!=0 && i%dumpFreq==0) {
                                         if(outputStyleFI==true) dumpFI(lat,solutes,i,dumpout,myerr);
-                                        else                    dumpLammps(lat,solutes,i,dumpout,myerr);
+                                        else                    dumpLammps(lat,solutes,i,ii,dumpout,myerr);
                                 }
                                 if(solutes!=NULL && suComFreq!=0 && i%suComFreq==0) dumpAllSuComs(solutes,mySuComOut);
                                 if(umbr!=NULL && umbrFreq!=0 && i%umbrFreq==0) {
@@ -745,13 +776,12 @@ int main(int argc, char* argv[]) {
                         dumpout=NULL;
                 }
                 /***************************************************************/
-                /*********************** PRODUCTION  ***************************/
+                /************************ CLUSTER MOVES ************************/
                 /***************************************************************/
 
                 time_t prodStart = time(NULL);
-                //clock_t prodStart = clock();
                 if(prodSteps>0) {
-                        if(nZeroSvSites>0) {
+                        if(nZeroSvSites[ii]>0) {
                                 fprintf(myerr,"cluster moves not currently implemented for lattice with defects.\n"
                                               "please either:\n"
                                               "-set nZeroSvSites=0 & run with cluster moves\n"
@@ -771,21 +801,20 @@ int main(int argc, char* argv[]) {
                         for(int j=0;j<mvtypes;++j) nmoves[j]=0;
                         for(int i=0;i<prodSteps;++i) {
                                 mvtmp=MCstep_cluster(lat,triallat,en,solutes,trialsolutes,umbr,tumbr,ewald,\
-                                                     inshlopt,rotationOpt,sweepsMult,kTeff,p,rng,mvstats,myerr);
-                                //mvtmp=MCstep_flipswap(lat,triallat,solutes,trialsolutes,inshlopt,p,rng);
+                                                     inshlopt,rotationOpt,sweepsMult,kTeff,p,ii,rng,mvstats,myerr);
                                 for(int j=0;j<mvtypes;++j) nmoves[j]+=mvtmp[j]; // hardcode
                                 free(mvtmp);    mvtmp=NULL;
                                 if(i%enFreq==0) {
                                         const double eUmb=energy_umbr(umbr);
                                         const double eSelf=-p->e_self;
-                                        energy_full(lat,solutes,en,ewald,p);
+                                        //energy_full(lat,solutes,en,ewald,p);
                                         fprintf(myout,"%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",        \
                                                 i,en[0]+en[1]+en[2]+en[3]+en[4]+en[5]+en[6]+en[7]+en[8]+en[9]+eUmb+eSelf, \
                                                 en[0],en[1],en[2],en[3],en[4],en[5],en[6],en[7],en[8],en[9],eUmb,eSelf     );
                                 }
                                 if(dumpFreq!=0 && i%dumpFreq==0) {
                                         if(outputStyleFI==true) dumpFI(lat,solutes,i,dumpout,myerr);
-                                        else                    dumpLammps(lat,solutes,i,dumpout,myerr);
+                                        else                    dumpLammps(lat,solutes,i,ii,dumpout,myerr);
                                 }
                                 if(solutes!=NULL && suComFreq!=0 && i%suComFreq==0) dumpAllSuComs(solutes,mySuComOut);
                                 if(umbr!=NULL && umbrFreq!=0 && i%umbrFreq==0) {
@@ -800,16 +829,16 @@ int main(int argc, char* argv[]) {
                                         const uint16_t lprefix=(uint16_t)strlen(prefix); //strlen ret pos of '\0'
                                         const uint16_t ldotdata=(uint16_t)strlen(".data");
                                         const uint16_t ndig=ndigits((long int)(i+equiSteps));
-                                        char* datafstr=(char*)malloc(lprefix+1u+ndig+ldotdata);
-                                        strncpy(datafstr,prefix,lprefix);
-                                        const int snpfret=snprintf(datafstr+lprefix,ndig+2u,"_%u",(i+equiSteps));
-                                        assert(snpfret==ndig+1 /*snprintf*/);
-                                        strncat(datafstr,".data",ldotdata);
+                                        char* datafstr=malloc((lprefix+ndig+ldotdata+2u)*sizeof(*datafstr));
+                                        assert(datafstr!=NULL /*malloc*/);
+                                        const int snpfret=snprintf(datafstr,lprefix+ndig+ldotdata+2u,"%s_%u.data",prefix,(i+equiSteps));
                                         FILE* dataout=fopen(datafstr,"w");
                                         assert(dataout!=NULL /*fopen*/);
                                         dumpData(lat,solutes,dataout);
                                         assert(fclose(dataout)==0);
-                                        free(datafstr); datafstr=NULL;
+                                        fprintf(stderr,"datafstr: %s\n",datafstr);
+                                        fflush(stderr);
+                                        free(datafstr);
                                 }
                         }
                 }
@@ -867,8 +896,8 @@ int main(int argc, char* argv[]) {
                 assert(paraname!=NULL && dataname!=NULL /*malloc*/);
                 intPtrs[nIntPtrs++]=(void*)paraname;
                 intPtrs[nIntPtrs++]=(void*)dataname;
-                memset(paraname,'\0',strlen(prefix)+4+1);
-                memset(dataname,'\0',strlen(prefix)+4+1);
+                memset(paraname,'\0',strlen(prefix)+5+1);
+                memset(dataname,'\0',strlen(prefix)+5+1);
                 strncat(paraname,prefix,strlen(prefix));
                 strncat(paraname,".para",strlen(".para"));
                 strncat(dataname,prefix,strlen(prefix));
@@ -876,7 +905,7 @@ int main(int argc, char* argv[]) {
 
                 dumpout=fopen(paraname,"w");
                 assert(dumpout!=NULL /*fopen*/);
-                dumpParameters(p,solutes,umbr,dumpout,myerr);
+                dumpParameters(p,solutes,umbr,ii,dumpout,myerr);
                 assert(fclose(dumpout)==0);
                 dumpout=fopen(dataname,"w");
                 assert(dumpout!=NULL /*fopen*/);

@@ -91,7 +91,7 @@ double energy_ising_su_local(su s, para p, lattice* subset, int lsubset) {
         return -(p->J)*e_isu*0.5;
 }
 
-double energy_full(lattice c, su s, double* E, double** ewald, para p) {
+double energy_full(lattice c, su s, double* E, double* ewald, para p) {
         extern double pi;
         #if SHIFT_COUL
         const double rInvErfcNN=erfc(1.0/(p->sigma)) - p->e_cut;
@@ -485,7 +485,7 @@ double energy_ising_su_local(su s, para p, lattice* subset, int lsubset) {
         return -(p->J)*e_isu*0.5;
 }
 
-double energy_full(lattice c, su s, double* E, double** ewald, para p) {
+double energy_full(lattice c, su s, double* E, double* ewald, para p) {
         extern double pi;
         #if SHIFT_COUL
         const double rInvErfcNN=erfc(1.0/(p->sigma)) - p->e_cut;
@@ -813,7 +813,7 @@ double energy_local(su s, double* E, para p, lattice* subset, int lsubset) {
 //////////////////////////////
 //NON-ISING ENERGY FUNCTIONS//
 //////////////////////////////
-double energy_coul_full(lattice c, double** ewald, para p) {
+double energy_coul_full(lattice c, double* ewald, para p) {
         extern double pi;
         #if SHIFT_COUL
         const double rInvErfcNN=erfc(1.0/(p->sigma)) - p->e_cut;
@@ -846,26 +846,19 @@ double energy_coul_full(lattice c, double** ewald, para p) {
         return (p->Q)*(0.5*e_c+e_cfft);
 }
 
-void test_energy_coul_simpCubic(lattice c, double** ewald, pcg32_random_t* rng, para p, FILE* myerr) {
+void test_energy_coul_simpCubic(lattice c, double* ewald, int coreNum, pcg32_random_t* rng, para p, FILE* myerr) {
         fprintf(myerr,"test_energy_coul_simpCubic...\n");
         const double Msc=1.748;
         double* chg;
         const int opt=0;
-        if(opt==0)      chg=setLatVal_simpCubic(c);
-        //else if(opt==1) chg=setLatVal_spacedSimpCubic(c);
-        //else if(opt==2) chg=setLatVal_spacedShiftedSimpCubic(c);
-        //else if(opt==3) chg=setLatVal_simpCubicWDefect(c,rng);
-                
+        if(opt==0) chg=setLatVal_simpCubic(c,coreNum);
         assert(chg[0]-chg[1]==0 /*neutral lattice*/);
         free(chg); chg=NULL;
         const double EcRpFFT=energy_coul_full(c,ewald,p);
         const double EcFFT=(p->Q)*energy_lr(c,ewald);
         const double EcR=EcRpFFT-EcFFT;
         double EcTot;
-        if(opt==0)      EcTot=EcR+EcFFT-(p->e_self);
-        //else if(opt==1) EcTot=EcR+EcFFT-(p->e_self)/8.0;
-        //else if(opt==2) EcTot=EcR+EcFFT-(p->e_self)/8.0;
-        //else if(opt==3) EcTot=EcR+EcFFT-(p->e_self);
+        if(opt==0) EcTot=EcR+EcFFT-(p->e_self);
 
         extern int N;
         const double r0=1.0;
@@ -895,174 +888,7 @@ void test_energy_coul_simpCubic(lattice c, double** ewald, pcg32_random_t* rng, 
         fflush(myerr);
 }
 
-void test_energy_coul_rand(lattice c, double** ewald, pcg32_random_t* rng, para p, FILE* myerr) {
-        fprintf(myerr,"test_energy_coul_rand...\n");
-        const double Msc=1.748;
-        double* chg;
-        const int opt=0;
-        if(opt==0)      chg=setLatVal_rand(c,rng,myerr);
-        //else if(opt==1) chg=setLatVal_spacedSimpCubic(c);
-        //else if(opt==2) chg=setLatVal_spacedShiftedSimpCubic(c);
-        //else if(opt==3) chg=setLatVal_simpCubicWDefect(c,rng);
-                
-        assert(chg[0]-chg[1]==0 /*neutral lattice*/);
-        free(chg); chg=NULL;
-        const double EcRpFFT=energy_coul_full(c,ewald,p);
-        const double EcFFT=(p->Q)*energy_lr(c,ewald);
-        const double EcR=EcRpFFT-EcFFT;
-        double EcTot;
-        if(opt==0)      EcTot=EcR+EcFFT-(p->e_self);
-        //else if(opt==1) EcTot=EcR+EcFFT-(p->e_self)/8.0;
-        //else if(opt==2) EcTot=EcR+EcFFT-(p->e_self)/8.0;
-        //else if(opt==3) EcTot=EcR+EcFFT-(p->e_self);
-
-        extern int N;
-        const double r0=1.0;
-        double EcLat=-N*(p->Q)/(r0)*Msc/2.0; // /2.0 because otherwise double-counting (think of 1/2 \sum q_i*V_i)
-        if(opt==1 || opt==2) EcLat/=8.0;
-
-        fprintf(myerr,"Ec_expect\t%f\n"
-                      "Ec_predic\t%f\n"
-                      "Ec_ratio\t%f\n",
-                      EcLat,EcTot,EcTot/EcLat);
-        fprintf(myerr,"EcR\t%f\n"
-                      "EcFFT\t%f\n"
-                      "EcSelf\t%f\n",
-                      EcR,EcFFT,(opt==0 || opt==3) ? (p->e_self) : (p->e_self)/8.0);
-        fprintf(myerr,"M_expect\t%f\n"
-                      "M_predic\t%f\n",
-                      Msc,EcTot/(-N*(p->Q)/(r0)));
-        fprintf(myerr,"test_energy_coul: ending... ");
-        double relErr=(EcTot-EcLat)/EcLat;
-        relErr*=(relErr<0.0 ? -1.0 : 1.0);
-        if(relErr<=0.01) fprintf(myerr,"success: relErr=%f <= 0.01\n",relErr);
-        else {
-                fprintf(myerr,"FAIL: relErr=%f <= 0.01. USE CAUTION WHEN PROCEEDING:"
-                              "MAY WANT TO RECONSIDER PARAMETER SETTINGS (sigma in particular)\n",relErr);
-        }
-        fflush(myerr);
-}
-
-//assumes spin has NOT already been flipped!
-//(ie. new spin = -1*ck)
-//to change this convention, just multiply
-//through deltaCk by -1
-double delta_energy_lr_singleflip(lattice c, double** ewald, int k) {
-        extern int N;
-        double deltaElr=0.0;
-        for(int j=0;j<k;++j) {
-                const int kmj=k-j-1;
-                if(c[j].hydrophobic==true) continue;
-                deltaElr+=*c[j].val*ewald[j][kmj];
-        }
-        for(int j=k+1;j<N;++j) {
-                const int jmk=j-k-1;
-                if(c[j].hydrophobic==true) continue;
-                deltaElr+=*c[j].val*ewald[k][jmk];
-        }
-        //assumes spin has NOT already been flipped!
-        const double deltaCk=(-(*c[k].val)) - (*c[k].val);
-        deltaElr*=deltaCk;
-        extern double pi;
-        return 4.0*pi*deltaElr/N;
-}
-
-//assumes spins have NOT already been flipped!
-//(ie. new spins = -1*ck , -1*cl)
-//to change this convention, just multiply
-//through deltaCk,deltaCl by -1
-double delta_energy_lr_doubleflip(lattice c, double** ewald, int k, int l) {
-        assert(k<l);
-        extern int N;
-        double deltaElrk=0.0, deltaElrl=0.0;
-        for(int j=0;j<k;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int kmj=k-j-1;
-                deltaElrk+=*c[j].val*ewald[j][kmj];
-                const int lmj=l-j-1;
-                deltaElrl+=*c[j].val*ewald[j][lmj];
-        }
-        //middle portion has k flipped already, but l same
-        for(int j=k+1;j<l;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int jmk=j-k-1;
-                deltaElrk+=*c[j].val*ewald[k][jmk];
-                const int lmj=l-j-1;
-                deltaElrl+=*c[j].val*ewald[j][lmj];
-        }
-        //last portion has both k and l flipped
-        for(int j=l+1;j<N;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int jmk=j-k-1;
-                deltaElrk+=*c[j].val*ewald[k][jmk];
-                const int jml=j-l-1;
-                deltaElrl+=*c[j].val*ewald[l][jml];
-        }
-        //assumes spins have NOT already been flipped!
-        const double deltaCk=(-(*c[k].val)) - (*c[k].val);
-        const double deltaCl=(-(*c[l].val)) - (*c[l].val);
-        deltaElrk*=deltaCk;
-        deltaElrl*=deltaCl;
-        extern double pi;
-        return 4.0*pi*(deltaElrk+deltaElrl)/N;
-}
-
-//generalizes delta_energy_lr_doubleflip
-//assumes spins have NOT already been flipped!
-//(ie. new spins = -1*ck , -1*cl)
-//to change this convention, just multiply
-//through deltaCk,deltaCl by -1
-double delta_energy_lr_nflip(lattice c, double** ewald, uint32_t* k, int nk) {
-        for(int i=1;i<nk;++i) assert(k[i-1]<k[i]);
-        extern int N;
-        double deltaElr[nk];
-        for(int i=0;i<nk;++i) deltaElr[i]=0.0;
-        for(uint32_t j=0;j<k[0];++j) {
-                if(c[j].hydrophobic==true) continue;
-                const double cjv=*c[j].val;
-                for(int l=0;l<nk;++l) {
-                        const uint32_t kl=k[l];
-                        const uint32_t klmj=kl-j-1u;
-                        deltaElr[l]+=cjv*ewald[j][klmj];
-                }
-        }
-        for(int i=1;i<nk;++i) {
-                for(uint32_t j=k[i-1]+1;j<k[i];++j) {
-                        if(c[j].hydrophobic==true) continue;
-                        const double cjv=*c[j].val;
-                        for(int l=0;l<i;++l) {
-                                const uint32_t kl=k[l];
-                                const uint32_t jmkl=j-kl-1u;
-                                deltaElr[l]+=cjv*ewald[kl][jmkl];
-                        }
-                        for(int l=i;l<nk;++l) {
-                                const uint32_t kl=k[l];
-                                const uint32_t klmj=kl-j-1u;
-                                deltaElr[l]+=cjv*ewald[j][klmj];
-                        }
-                }
-        }
-        for(uint32_t j=k[nk-1]+1;j<N;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const double cjv=*c[j].val;
-                for(int l=0;l<nk;++l) {
-                        const uint32_t kl=k[l];
-                        const uint32_t jmkl=j-kl-1u;
-                        deltaElr[l]+=cjv*ewald[kl][jmkl];
-                }
-        }
-        
-        double deltaElrSum=0.0;
-        for(int i=0;i<nk;++i) { //assumes spins have NOT already been flipped!
-                const uint32_t ki=k[i];
-                const double deltaCki=(-(*c[ki].val)) - (*c[ki].val);
-                deltaElrSum+=deltaCki*deltaElr[i];
-        }
-        extern double pi;
-        return 4.0*pi*deltaElrSum/N;
-}
-
-double energy_lr(lattice c, double** ewald) {
+double energy_lr(lattice c, double* ewald) {
         #if !FFT_ON
         return 0.0;
         #endif
@@ -1073,82 +899,30 @@ double energy_lr(lattice c, double** ewald) {
                 double Ej=0.0;
                 for(int l=j+1;l<N;++l) {
                         if(c[l].hydrophobic==true) continue;
-                        const int lmj=l-j-1;
-                        Ej+=*c[l].val*ewald[j][lmj];
+                        const int i=getEwaldIndexForRij(j,l);
+                        Ej+=*c[l].val*ewald[i];
                 }
                 Elr+=*c[j].val*Ej;
         }
-        Elr+=ewald[N-1][0]*N/2.0;
+        Elr+=ewald[0]*N/2.0;
         extern double pi;
         return 4.0*pi*Elr/N;
 }
 
-double energy_lr_singleflip(lattice c, double** ewald, int k) {
-        #if !FFT_ON
-        return 0.0;
-        #endif
-        if(c[k].hydrophobic==true) return 0.0;
-        extern int N;
-        double Elr=0.0;
-        for(int j=0;j<k;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int kmj=k-j-1;
-                Elr+=*c[j].val*ewald[j][kmj];
+//i is center
+int getEwaldIndexForRij(int i, int j) {
+        extern int d;
+        int ri[d],rj[d],rij[d];
+        getPos(i,ri);
+        getPos(j,rj);
+        for(int e=0;e<d;++e) {
+                rij[e]=rj[e]-ri[e];
         }
-        for(int j=k+1;j<N;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int jmk=j-k-1;
-                Elr+=*c[j].val*ewald[k][jmk];
-        }
-        Elr*=*c[k].val;
-        extern double pi;
-        return 4.0*pi*Elr/N;
+        const int n=getWrappedSite(rij,NULL);
+        return n;
 }
 
-double energy_lr_doubleflip(lattice c, double** ewald, int k, int l) {
-        #if !FFT_ON
-        return 0.0;
-        #endif
-        assert(k<l);
-        extern int N;
-        double Elrk=0.0, Elrl=0.0;
-        for(int j=0;j<k;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int kmj=k-j-1;
-                Elrk+=*c[j].val*ewald[j][kmj];
-                const int lmj=l-j-1;
-                Elrl+=*c[j].val*ewald[j][lmj];
-        }
-        //middle portion has k flipped already, but l same
-        for(int j=k+1;j<l;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int jmk=j-k-1;
-                Elrk+=*c[j].val*ewald[k][jmk];
-                const int lmj=l-j-1;
-                Elrl+=*c[j].val*ewald[j][lmj];
-        }
-        //last portion has both k and l flipped
-        for(int j=l+1;j<N;++j) {
-                if(c[j].hydrophobic==true) continue;
-                const int jmk=j-k-1;
-                Elrk+=*c[j].val*ewald[k][jmk];
-                const int jml=j-l-1;
-                Elrl+=*c[j].val*ewald[l][jml];
-        }
-        Elrk+=*c[k].val*ewald[N-1][0];
-        Elrl+=*c[l].val*ewald[N-1][0];
-        if(c[k].hydrophobic==false) Elrk*=*c[k].val;
-        if(c[l].hydrophobic==false) Elrl*=*c[l].val;
-        double Elrkl=0.0;
-        if(c[k].hydrophobic==false && c[k].hydrophobic==false) {
-                Elrkl=(*c[k].val)*ewald[k][k-l-1]*(*c[l].val);
-        }
-        extern double pi;
-        return 4.0*pi*(Elrk+Elrl+Elrkl)/N;
-        //return 4.0*pi*(Elrk+Elrl)/N;
-}
-
-double energy_lr_nflip(lattice c, double** ewald, uint32_t* k, int nk) {
+double energy_lr_nflip(lattice c, double* ewald, uint32_t* k, int nk) {
         #if !FFT_ON
         return 0.0;
         #endif
@@ -1161,8 +935,8 @@ double energy_lr_nflip(lattice c, double** ewald, uint32_t* k, int nk) {
                 const double cjv=*c[j].val;
                 for(int l=0;l<nk;++l) {
                         const uint32_t kl=k[l];
-                        const uint32_t klmj=kl-j-1u;
-                        Elr[l]+=cjv*ewald[j][klmj];
+                        const int i=getEwaldIndexForRij(kl,j);
+                        Elr[l]+=cjv*ewald[i];
                 }
         }
         for(int i=1;i<nk;++i) {
@@ -1171,13 +945,13 @@ double energy_lr_nflip(lattice c, double** ewald, uint32_t* k, int nk) {
                         const double cjv=*c[j].val;
                         for(int l=0;l<i;++l) {
                                 const uint32_t kl=k[l];
-                                const uint32_t jmkl=j-kl-1u;
-                                Elr[l]+=cjv*ewald[kl][jmkl];
+                                const int i=getEwaldIndexForRij(kl,j);
+                                Elr[l]+=cjv*ewald[i];
                         }
                         for(int l=i;l<nk;++l) {
                                 const uint32_t kl=k[l];
-                                const uint32_t klmj=kl-j-1u;
-                                Elr[l]+=cjv*ewald[j][klmj];
+                                const int i=getEwaldIndexForRij(kl,j);
+                                Elr[l]+=cjv*ewald[i];
                         }
                 }
         }
@@ -1186,8 +960,8 @@ double energy_lr_nflip(lattice c, double** ewald, uint32_t* k, int nk) {
                 const double cjv=*c[j].val;
                 for(int l=0;l<nk;++l) {
                         const uint32_t kl=k[l];
-                        const uint32_t jmkl=j-kl-1u;
-                        Elr[l]+=cjv*ewald[kl][jmkl];
+                        const int i=getEwaldIndexForRij(kl,j);
+                        Elr[l]+=cjv*ewald[i];
                 }
         }
 
@@ -1195,14 +969,13 @@ double energy_lr_nflip(lattice c, double** ewald, uint32_t* k, int nk) {
         for(int i=0;i<nk;++i) {
                 const uint32_t ki=k[i];
                 if(c[ki].hydrophobic==true) continue;
-                ElrSum+=*c[ki].val*(Elr[i]+*c[ki].val*ewald[N-1][0]);
-                //ElrSum+=*c[ki].val*Elr[i];
+                ElrSum+=*c[ki].val*(Elr[i]+*c[ki].val*ewald[0]);
                 if(i<nk-1) {
                         for(int j=i+1;j<nk;++j) {
                                 const uint32_t kj=k[j];
                                 if(c[kj].hydrophobic==true) continue;
-                                const uint32_t kjmki=kj-ki-1u;
-                                const double Elrkikj=(*c[ki].val)*ewald[ki][kjmki]*(*c[kj].val);
+                                const int l=getEwaldIndexForRij(ki,kj);
+                                const double Elrkikj=(*c[ki].val)*ewald[l]*(*c[kj].val);
                                 ElrSum+=Elrkikj;
                         }
                 }
