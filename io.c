@@ -1,11 +1,10 @@
 #include "io.h"
 
-/*******************************/
-/********       IO      ********/
-/*******************************/
+//******************************
+//*******       IO      ********
+//******************************
 
-/* Pairs with readSetParameters() output.
- */
+// Pairs with readSetParameters() output.
 void dumpParameters(para p, su s, umb u, int coreNum, FILE* f, FILE* myerr) {
         extern int N,Nsu,d,shlL,types,inshlopt;
         extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
@@ -159,32 +158,30 @@ int* readSetParameters(para p, char**** linesByType, int coreNum, FILE* f, FILE*
 }
 
 
-/* Output data file which can be read by readData()
- * to allow a simulation to be restarted with an
- * equivalent configuration.
- * Data file of format:
- *
- * Frustrated Ising data file v#.##
- *
- * N cells
- * N_t types
- * N_s solutes
- *
- * d dimensions
- * e_0lo e_0hi
- * e_1lo e_1hi
- * ...
- * e_(d-1)lo e_(d-1)hi
- *
- * Cells
- * i type_i e_0i e_1i ... e_(d-1)i solute_i
- * ...
- *
- * Solutes
- * i surfType_i com_0i ... com_(d-1)i step_i nsites_i ninshl_i linDim_i hlw_i nMotion_i shape_i
- * ...
- *
- */
+// Output data file which can be read by readData()
+// to allow a simulation to be restarted with an
+// equivalent configuration.
+// Data file of format:
+//
+// Frustrated Ising data file v#.##
+//
+// N cells
+// N_t types
+// N_s solutes
+//
+// d dimensions
+// e_0lo e_0hi
+// e_1lo e_1hi
+// ...
+// e_(d-1)lo e_(d-1)hi
+//
+// Cells
+// i type_i e_0i e_1i ... e_(d-1)i solute_i
+// ...
+//
+// Solutes
+// i surfType_i com_0i ... com_(d-1)i step_i nsites_i ninshl_i linDim_i hlw_i nMotion_i shape_i
+// ...
 void dumpData(lattice c, su s, FILE* f) {
         extern int N,types,Nsu,d;
         extern int* L;
@@ -207,8 +204,7 @@ void dumpData(lattice c, su s, FILE* f) {
         fflush(f);
 }
 
-/* Read data from .data file output by dumpData() into memory.
- */
+//Read data from .data file output by dumpData() into memory.
 int readData(char*** lines, FILE* f) {
         const int lbuf=32768;
         char* buf=malloc(lbuf);
@@ -744,17 +740,16 @@ int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f
         }
 }
 
-/* Output in LAMMPS format for visualization in VMD;
- * currently allows visualization for 2D & 3D lattices.
- * Uses ctplus & ctminus because LAMMPS wants particles
- * which do not change type, ie. if particle 'm' is
- * declared as type 't', it must remain so throughout
- * the simulation. But the lattice definition for this
- * code has cells which remain at constant positions
- * with spins that change orientation. ctplus&ctminus
- * are a hack to make the output type compatible with
- * this code's interal representation of the lattice.
- */
+// Output in LAMMPS format for visualization in VMD;
+// currently allows visualization for 2D & 3D lattices.
+// Uses ctplus & ctminus because LAMMPS wants particles
+// which do not change type, ie. if particle 'm' is
+// declared as type 't', it must remain so throughout
+// the simulation. But the lattice definition for this
+// code has cells which remain at constant positions
+// with spins that change orientation. ctplus&ctminus
+// are a hack to make the output type compatible with
+// this code's interal representation of the lattice.
 void dumpLammps(lattice c, su s, int ts, int coreNum, FILE* f, FILE* myerr) {
         extern int N,d,Nsu;
         extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;
@@ -786,7 +781,7 @@ void dumpLammps(lattice c, su s, int ts, int coreNum, FILE* f, FILE* myerr) {
                 for(int e=0;e<d;++e) fprintf(f,"e%d ",e);
                 fprintf(f,"\n");
         }
-        // cell/config
+        //cell/config
         const int nTypesBeforeSu = (nZeroSvSites==0) ? 2 : 3;
         for(int i=0;i<N;++i) {
                 if(c[i].su!=-1)          fprintf(f,"%d %d ",ctsu[c[i].su]++,nTypesBeforeSu+c[i].su);
@@ -797,7 +792,7 @@ void dumpLammps(lattice c, su s, int ts, int coreNum, FILE* f, FILE* myerr) {
                 int pos[d];
                 getPos(i,pos);
                 for(int e=0;e<d;++e) fprintf(f,"%d ",pos[e]);
-                if(d==2) fprintf(f,"0 "); // make 2D plane in 3D so VMD can visualize in LAMMPS format
+                if(d==2) fprintf(f,"0 "); //make 2D plane in 3D so VMD can visualize in LAMMPS format
                 fprintf(f,"\n");
         }
         if(ctminus!=nMinusSvSites[coreNum] || ctplus!=nMinusSvSites[coreNum]+nPlusSvSites[coreNum] || ctzero!=nMinusSvSites[coreNum]+nPlusSvSites[coreNum]+nZeroSvSites[coreNum]) {
@@ -854,7 +849,7 @@ void dumpFI(lattice c, su s, int ts, FILE* f, FILE* myerr) {
                 for(int e=0;e<d;++e) fprintf(f,"e%d ",e);
                 fprintf(f,"\n");
         }
-        // cell/config
+        //cell/config
         for(int i=0;i<N;++i) {
                 fprintf(f,"%d ",i);
                 if(c[i].hydrophobic==true) fprintf(f,"3 ");
@@ -866,7 +861,7 @@ void dumpFI(lattice c, su s, int ts, FILE* f, FILE* myerr) {
                 int pos[d];
                 getPos(i,pos);
                 for(int e=0;e<d;++e) fprintf(f,"%d ",pos[e]);
-                if(d==2) fprintf(f,"0 "); // make 2D plane in 3D so VMD can visualize in LAMMPS format
+                if(d==2) fprintf(f,"0 "); //make 2D plane in 3D so VMD can visualize in LAMMPS format
                 fprintf(f,"\n");
         }
 }

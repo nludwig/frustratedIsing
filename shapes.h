@@ -19,8 +19,8 @@ int** getShapeInterfacePos(int** shape, int nsites, int* ninterface, int** Lcube
 int uniqueint(int** arr, int larr);
 int uniqueuint32_t(uint32_t** arr, int larr);
 int uniquelattice(lattice** arr, int larr);
-int* getShapeBounds(int** shape, int nsites);
-int* embedShapeInBorder(int** shape, int nsites, int* border);
+int* enclosingCubeSize(int** shape, int nsites);
+int* embedShapeInCube(int** shape, int nsites, int* border);
 int** buildNeighCube(double Rc);
 int diff(int** arr1, int larr1, int** arr2, int larr2);
 //int diff(int* arr1, int larr1, int* arr2, int larr2);

@@ -1,14 +1,14 @@
 #include "utility.h"
 
-/*******************************/
-/********    utility    ********/
-/*******************************/
+//******************************
+//*******    utility    ********
+//******************************
 
-// returns *nwords words which were separated in
-// str by elements from sep
+//returns *nwords words which were separated in
+//str by elements from sep
 //
-// nwords: either one-element int* or NULL:
-//      NULL -> don't return nwords
+//nwords: either one-element int* or NULL:
+//     NULL -> don't return nwords
 char** split(char* str, const char* sep, int* nwords) {
         int len=strlen(str);
         char* mem=malloc(len+1);
@@ -117,9 +117,9 @@ void allocGlobalNSiteArrays(int** nPlusSvSites, int** nMinusSvSites, int** nZero
                *totSvPlus!=NULL && *totSvMinus!=NULL && *totSuPlus!=NULL && *totSuMinus!=NULL);
 }
 
-/*******************************/
-/****** lattice related   ******/
-/*******************************/
+//******************************
+//***** lattice related   ******
+//******************************
 
 int** setupPos() {
         extern int N,d;
@@ -167,11 +167,6 @@ int getSite(int* pos, int* L_in) {
                 n+=pos[e]*prod;
                 prod*=L_in[e];
         }
-        //for(int e=0;e<d;++e) { COL MAJOR
-        //        int prod=1;
-        //        for(int j=0;j<e;++j) prod*=L[j];
-        //        n+=pos[e]*prod;
-        //}
         return n;
 }
 
@@ -310,7 +305,7 @@ double* checkCharge(lattice c, int lc, double* ret) {
 para copyPara(para p) {
         para pNew=malloc(1*sizeof(*pNew));
         assert(pNew!=NULL /*malloc*/);
-//as of 190418:
+//as of 191001:
 //struct parameters {
 //        double J;
 //        double Q;
@@ -336,9 +331,9 @@ para copyPara(para p) {
         return pNew;
 }
 
-/*******************************/
-/********  bc related   ********/
-/*******************************/
+//******************************
+//*******  bc related   ********
+//******************************
 
 double pbc(double dst, int e) {
         extern int* L;

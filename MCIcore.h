@@ -44,8 +44,6 @@ void setLatInitSu(lattice config); //init lat to no solutes
 int willParaLatBeChargeNeut(int coreNum); //0 no; 1 yes
 double* setLatVal_rand(lattice config, su s, int coreNum, pcg32_random_t* rng, FILE* myerr);
 double* setLatVal_data(lattice config, char** lines, int nlines, int coreNum, FILE* myerr);
-double* setLatVal_simpCubic(lattice config, int coreNum);
-double* setLatVal_simpCubicWDefect(lattice config, int coreNum, pcg32_random_t* rng);
 void** setLatNeigh_coul_twoway(lattice config, para parameters, FILE* myerr);
 double* setupEwald(int* L, double sigma, int nCoresP);
 int localSubset(lattice* core, int lcore, lattice** subset);

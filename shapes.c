@@ -46,7 +46,7 @@ int** buildRectangle(int* l) {
 
 int* getShapeInterface(int** shape, int nsites, int* ninterface, int** Lcube, int* border) {
         extern int d;
-        *Lcube=embedShapeInBorder(shape,nsites,border);
+        *Lcube=embedShapeInCube(shape,nsites,border);
         const int nNN=nsites*d*2;
         int* nnList=malloc(nNN*sizeof(*nnList));
         int* cmpList=malloc(nsites*sizeof(*cmpList));
@@ -129,8 +129,7 @@ int uniquelattice(lattice** arr, int larr) {
         return i+1;
 }
 
-//int* enclosingCubeSize(int** shape, int nsites)
-int* getShapeBounds(int** shape, int nsites) {
+int* enclosingCubeSize(int** shape, int nsites)
         //find maxes
         extern int d;
         int min[d];
@@ -154,10 +153,9 @@ int* getShapeBounds(int** shape, int nsites) {
         return shapeMinMax;
 }
 
-//int* embedShapeInCube(int** shape, int nsites, int* border)
-int* embedShapeInBorder(int** shape, int nsites, int* border) {
+int* embedShapeInCube(int** shape, int nsites, int* border)
         extern int d;
-        int* minMax=getShapeBounds(shape,nsites);
+        int* minMax=enclosingCubeSize(shape,nsites);
         int* LwBorder=malloc(d*sizeof(*LwBorder));
         assert(LwBorder!=NULL /*malloc*/);
         for(int e=0;e<d;++e) LwBorder[e]=minMax[e+d]-minMax[e]+2*border[e]+1;

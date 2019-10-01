@@ -1,16 +1,16 @@
 //******************
-// sections (191001)
-// INPUTS
-// SOLUTE
-// LATTICE
-// SPOOF?
-// SWAP MOVES
-// CLUSTER MOVES
+//sections (191001)
+//INPUTS
+//SOLUTE SETUP
+//LATTICE SETUP
+//SPOOF?
+//SWAP MOVES
+//CLUSTER MOVES
 //******************
 
 #include "headerBundle.h"
 
-// DEFINING EXTERNAL VAR.S
+//DEFINING EXTERNAL VAR.S
 double pi=0;
 double* totSvPlus=NULL;
 double* totSvMinus=NULL;
@@ -37,14 +37,14 @@ int* L=NULL;
 int* bc=NULL;
 int** posArr=NULL;
 
-// DONE DEFINING EXT VAR.S
+//DONE DEFINING EXT VAR.S
 
 int main(int argc, char* argv[]) {
         pi=acos(-1);
         //**************************************************************
         //********************** INPUTS ********************************
         //**************************************************************
-        // get inputs & assign parameters
+        //get inputs & assign parameters
         fprintf(stderr,"args:\n");
         for(int i=0;i<argc;++i) fprintf(stderr,"%s ",*(argv+i));
         fprintf(stderr,"\n");
@@ -60,22 +60,23 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"\n");
 
         //********************************************************************
-        // pre setup:
-        // -start timer
-        // -setup pointer tracker for easy freeing at end of run
-        // -setup myout & myerr to sidestep need to write to stdout & stderr;
-        //      myout & myerr names based on user input dumpout name
+        //pre-startup:
+        //-start timer
+        //-setup pointer tracker for easy freeing at end of run
+        //-setup myout & myerr to sidestep need to write to stdout & stderr;
+        //     myout & myerr names based on user input dumpout name
         //********************************************************************
         clock_t progStart=time(NULL);
 
-        const int totExtPtrs=12; //updating totptrs->totExtPtrs
+        const int totExtPtrs=12;
         void* extPtrs[totExtPtrs];
         int nExtPtrs=0;
 
         int nCoresO;
         char* fnames=argv[argc-1];
         char** fname=split(fnames,",",&nCoresO);
-        // done w/ pre-startup
+
+        //done w/ pre-startup
 
         int verbose=atoi(*(++argv));
         const int lSpoofIn=strlen(*(++argv));
@@ -88,8 +89,8 @@ int main(int argc, char* argv[]) {
         bool rotationOpt=(atoi(*(++argv))==0) ? false : true;
         N=atoi(*(++argv)); //extern
 
-        d=3; //extern hardcode
-        assert(d==3 /*generalize this hardcode*/);
+        d=3; //extern hardcode; todo: generalize this hardcode
+        assert(d==3 /*hardcode*/);
 
         L=malloc(d*sizeof(*L)); //extern
         bc=malloc(2*d*sizeof(*bc)); //extern
@@ -109,7 +110,7 @@ int main(int argc, char* argv[]) {
 
         const double sigma=atof(*(++argv));
 
-        //load para&data filenames, su move modifiers: private
+        //load para&data filenames, su move modifiers: private to each thread
         int nCoresP,nCoresD,nCoresS,nCoresK;
         char* paraInputStr=*(++argv);
         char** parasIn=split(paraInputStr,",",&nCoresP);
@@ -135,7 +136,7 @@ int main(int argc, char* argv[]) {
                                &nPlusSuSites,&nMinusSuSites,&nHydrSuSites,
                                &totSvPlus,&totSvMinus,&totSuPlus,&totSuMinus,nCoresD);
 
-        //omp compute Ewald sum
+        //compute Ewald sum (omp)
         double* ewald=NULL;
         #if FFT_ON
         if(verbose==1) {
@@ -175,7 +176,6 @@ int main(int argc, char* argv[]) {
         extPtrs[nExtPtrs++]=sweepsMultIn;
         extPtrs[nExtPtrs++]=kTeffIn;
 
-        //omp code arg loading
         int enFreq=atoi(*(++argv));
         int dumpFreq=atoi(*(++argv));
         int dataFreq=atoi(*(++argv));
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
         int umbrFreq=atoi(*(++argv));
         int equiSteps=atoi(*(++argv));
         int prodSteps=atoi(*(++argv));
-        // start RNG: get seeds; init
+        //start RNG: get seeds; init
         int extltmp;
         char** rngSeeds=split(*(++argv), ",", &extltmp);
         uint64_t rngseed=strtoul(*rngSeeds,NULL,10);
@@ -195,8 +195,10 @@ int main(int argc, char* argv[]) {
         uint32_t threadRngSeeds[2*nCoresP];
         for(int ii=0;ii<2*nCoresP;++ii) threadRngSeeds[ii]=pcg32_random_r(extRng);
 
+	//split into threads; continue loading before launching sim.s on each thread
         #pragma omp parallel for num_threads(nCoresP)
         for(int ii=0;ii<nCoresP;++ii) {
+		//thread pre-startup
                 const int totIntPtrs=39;
                 void* intPtrs[totIntPtrs];
                 int nIntPtrs=0;
@@ -253,7 +255,7 @@ int main(int argc, char* argv[]) {
                 for(int i=0;i<argc;++i) fprintf(myerr,"%s ",*(argv-(argc-2)+i));
                 fprintf(myerr,"\n");
 
-                // done w/ thread pre-startup
+                //done w/ thread pre-startup
 
                 FILE* readIn=fopen(parasIn[ii],"r");        //readIn parameters
 
@@ -341,7 +343,7 @@ int main(int argc, char* argv[]) {
                 if(kTeffIn!=NULL) kTeff=atof(kTeffIn[ii]);
 
                 //**************************************************************
-                //********************** SOLUTE ********************************
+                //********************** SOLUTE SETUP **************************
                 //**************************************************************
 
                 //functions expect inputs for solutes, etc.; if no
@@ -448,7 +450,7 @@ int main(int argc, char* argv[]) {
                 }
 
                 //**************************************************************
-                //********************** LATTICE *******************************
+                //********************** LATTICE SETUP *************************
                 //**************************************************************
                 fprintf(myerr,"\nrngseed,seq: %lu,%lu\n",threadRngSeeds[ii],threadRngSeeds[ii+nCoresP]);
                 pcg32_random_t randomNumberGenerator;
@@ -456,7 +458,7 @@ int main(int argc, char* argv[]) {
                 pcg32_srandom_r(rng,threadRngSeeds[ii],threadRngSeeds[ii+nCoresP]);
                 fprintf(myerr,"before valBlock\n");
                 fflush(myerr);
-                // initialize lattice
+                //initialize lattice
                 lattice lat=malloc(N*sizeof(*lat));
                 double* valBlock=fftw_malloc(2*N*sizeof(*valBlock));
                 assert(lat!=NULL && valBlock!=NULL /*malloc*/);
@@ -650,12 +652,12 @@ int main(int argc, char* argv[]) {
                         strncat(feq,prefix,strlen(prefix));   //found @ start of main()
                         if(verbose==1) fprintf(myerr,"feq after cating prefix: %s\n",feq);
                         if(outputStyleFI==false) {
-                                strncat(feq,"_equi.lammpstrj",strlen("_equi.lammpstrj"));
-                                if(verbose==1) fprintf(myerr,"feq after cating '_equi.lammpstrj': %s\n",feq);
+                                strncat(feq,"_swap.lammpstrj",strlen("_swap.lammpstrj"));
+                                if(verbose==1) fprintf(myerr,"feq after cating '_swap.lammpstrj': %s\n",feq);
                         }
                         else {
-                                strncat(feq,"_equi.fitrj",strlen("_equi.fitrj"));
-                                if(verbose==1) fprintf(myerr,"feq after cating '_equi.fitrj': %s\n",feq);
+                                strncat(feq,"_swap.fitrj",strlen("_swap.fitrj"));
+                                if(verbose==1) fprintf(myerr,"feq after cating '_swap.fitrj': %s\n",feq);
                         }
 
 
