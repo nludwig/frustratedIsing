@@ -98,18 +98,6 @@ void initPara(para p) {
         p->fftOn=0;
 }
 
-int intArrMin(int* a, int l) {
-        int m=a[0];
-        for(int i=1;i<l;++i) if(a[i]<m) m=a[i];
-        return m;
-}
-
-int intArrMax(int* a, int l) {
-        int m=a[0];
-        for(int i=1;i<l;++i) if(a[i]>m) m=a[i];
-        return m;
-}
-
 void allocGlobalNSiteArrays(int** nPlusSvSites, int** nMinusSvSites, int** nZeroSvSites,
                             int** nPlusSuSites, int** nMinusSuSites, int** nHydrSuSites,
                             double** totSvPlus, double** totSvMinus, double** totSuPlus,

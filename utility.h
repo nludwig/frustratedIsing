@@ -18,8 +18,6 @@ int iCmp(int* a, int* b);
 int lattCmp(lattice* a, lattice* b);
 int uint32_tCmp(uint32_t* a, uint32_t* b);
 int doubleMatrixCmp(double** a, double**b, int d); //0 if diff, 1 if same
-int intArrMin(int* arr, int larr);
-int intArrMax(int* arr, int larr);
 void allocGlobalNSiteArrays(int** nPlusSvSites, int** nMinusSvSites, int** nZeroSvSites,
                             int** nPlusSuSites, int** nMinusSuSites, int** nHydrSuSites,
                             double** totSvPlus, double** totSvMinus, double** totSuPlus, double** totSuMinus,

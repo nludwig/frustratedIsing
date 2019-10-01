@@ -365,9 +365,7 @@ bool setHydrophobicExist(su s) {
  */
 /* two-stage comparison:
  ** heuristic: quickly skip solutes that
- **     have large separation (defined by
- **     closest approach of d-cubes along
- **     diagonal)
+ **     have large separation 
  ** algorithmic: sort-search to confirm
  **     solutes do not share the same site
  */
@@ -407,39 +405,6 @@ int checkSuOverlap(su s, int ind, int inshlopt) {
         free(sindsites);
         return 0;
 }
-                /*
-                //heuristic to bail out early if solutes are far apart or very close
-                //related to dist. of closest approach for cubes along a diagonal
-                //see pg.14 NBL lab notes 1608-
-                r2=0.0;
-                for(int e=0;e<d;++e)
-                {
-                        rvec[e]=pbc((s[ind].com[e]-s[i].com[e]),e);
-                        r2+=rvec[e]*rvec[e];
-                }
-                if(strcmp(s[i].shape,"cube")==0)
-                {
-                        minsize=(double)(s[ind].linDim[0]+s[i].linDim[0]+4*inshlopt*shlL);
-                        maxsize=minsize;
-                }
-                if(strcmp(s[i].shape,"rectangle")==0 || strcmp(s[i].shape,"rect")==0)
-                {
-                        const int minLinDimi=intArrMin(s[i].linDim,d);
-                        const int maxLinDimi=intArrMax(s[i].linDim,d);
-                        const int minLinDimind=intArrMin(s[ind].linDim,d);
-                        const int maxLinDimind=intArrMax(s[ind].linDim,d);
-                        minsize=(double)(minLinDimi+minLinDimind+4*inshlopt*shlL);
-                        maxsize=(double)(maxLinDimi+maxLinDimind+4*inshlopt*shlL);
-                }
-                minsize=minsize*minsize*1.0/4.0;
-                maxsize=maxsize*maxsize;
-                if(4.0*r2 > d*maxsize)  continue;
-                else if(r2 < minsize)
-                {
-                        free(sindsites);
-                        return 1;
-                }
-                */
 
 /*******************************/
 /********     core      ********/
