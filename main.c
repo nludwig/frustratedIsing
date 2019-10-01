@@ -495,24 +495,6 @@ int main(int argc, char* argv[]) {
                         fprintf(stderr,"thread %d: finished setting neighbors\n",ii);
                 }
 
-                //fprintf(myerr,"before test_simpCubic\n");
-                //fflush(myerr);
-                //if(p->fftOn==1) { //setLatVal_simpCubic resets nPlusSites,...
-                //        const int nPlusSitesTmp=nPlusSites;
-                //        const int nMinusSitesTmp=nMinusSites;
-                //        const int nZeroSitesTmp=nZeroSites;
-                //        test_energy_coul_simpCubic(lat,ewald,rng,p,myerr);
-                //        nPlusSites=nPlusSitesTmp;
-                //        nMinusSites=nMinusSitesTmp;
-                //        nZeroSites=nZeroSitesTmp;
-                //}
-                //nPlusSvSites=0; //reset from input
-                //nMinusSvSites=0;
-                //nZeroSvSites=0;
-                //totSvPlus=0.0;
-                //totSvMinus=0.0;
-                //setCharge(lat);
-
                 double* chg=NULL;
                 if(datain==1) {
                         chg=setLatVal_data(lat,datalines,ndatalines,ii,myerr);
