@@ -61,10 +61,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"args:\n");
         for(int i=0;i<argc;++i) fprintf(stderr,"%s ",*(argv+i));
         fprintf(stderr,"\n");
-        const int nargs=22;
+        const int nargs=21;
         if(argc != nargs) {
                 fprintf(stderr,"incorrect num. args (%d instead of %d); usage:\n",argc,nargs);
-                fprintf(stderr,"./MCIsing verbose?(0/1) spoof?(0/in.lammpstrj) neutralOverallOnSoluteInsertion?(0/1) rotation?(0/1) N L0,L1,L2 sigma ewaldIn(or'none') parametersIn0,1,.. dataIn0,1,..(or'none') sweepsMult0,1,..(or0.0) +kTeff0,1,..(or0.0) enFreq dumpFreq dataFreq suComFreq umbrFreq equiSteps prodSteps rngSeed,rngSeq confDump0,1,..\n");
+                fprintf(stderr,"./MCIsing verbose?(0/1) spoof?(0/in.lammpstrj) neutralOverallOnSoluteInsertion?(0/1) rotation?(0/1) N L0,L1,L2 sigma parametersIn0,1,.. dataIn0,1,..(or'none') sweepsMult0,1,..(or0.0) +kTeff0,1,..(or0.0) enFreq dumpFreq dataFreq suComFreq umbrFreq equiSteps prodSteps rngSeed,rngSeq confDump0,1,..\n");
                 return 1;
         }
 
@@ -125,14 +125,6 @@ int main(int argc, char* argv[]) {
 
         const double sigma=atof(*(++argv));
 
-        //grab ewald file name: shared
-        FILE* ewaldIn=NULL;
-        if(strcmp(*(++argv),"none") != 0) {
-                ewaldIn=fopen(*(argv),"r");
-                assert(ewaldIn!=NULL /*fopen*/);
-                if(verbose==1) fprintf(stderr,"main: opened data in ewald file at %s\n",*(argv));
-        }
-
         //load para&data filenames, su move modifiers: private
         int nCoresP,nCoresD,nCoresS,nCoresK;
         char* paraInputStr=*(++argv);
@@ -159,21 +151,15 @@ int main(int argc, char* argv[]) {
                                &nPlusSuSites,&nMinusSuSites,&nHydrSuSites,
                                &totSvPlus,&totSvMinus,&totSuPlus,&totSuMinus,nCoresD);
 
-        //omp ewald load
+        //omp compute Ewald sum
         double* ewald=NULL;
         #if FFT_ON
         if(verbose==1) {
                 fprintf(stderr,"before ewald\n");
                 fflush(stderr);
         }
-        if(ewaldIn!=NULL) {
-                loadEwaldChunks(&ewald,N,ewaldIn);
-                assert(fclose(ewaldIn)==0);
-        }
-        else {
-                ewald=setupEwald(L,sigma,nCoresP);
-                assert(ewald!=NULL);
-        }
+        ewald=setupEwald(L,sigma,nCoresP);
+        assert(ewald!=NULL);
         extPtrs[nExtPtrs++]=ewald;
         if(verbose==1) fprintf(stderr,"ewald sucessfully loaded\n");
         #endif

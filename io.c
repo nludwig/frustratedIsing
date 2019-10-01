@@ -651,40 +651,6 @@ void dumpUmbrellas(umb u, su s, para p, FILE* f, FILE* myerr) {
         fflush(f);
 }
 
-//test using this function in place of readData
-int readLinesSimple(char*** lines, FILE* f, FILE* myerr) {
-        assert(f!=NULL);
-        const int lbuf=32768;
-        char buf[lbuf];
-        memset(buf,'\0',lbuf);
-        int nlines=0, totchars=0;
-        while(fgets(buf,lbuf,f) != NULL) { //find length of header sect.
-                const int l=strlen(buf);
-                totchars+=l;
-                if(buf[l-1]=='\n') ++nlines;
-        }
-
-        assert(fseek(f,0,SEEK_SET)==0);
-        (*lines)=malloc(nlines*sizeof(**lines));
-        char* linesStore=malloc(totchars+nlines); //extra nlines for str sep.s '\0'
-        assert(*lines!=NULL && linesStore!=NULL /*malloc*/);
-        linesStore[0]='\0'; //so first call of strncat() <-> strncpy()
-        int i=0,l=0,prevstrlen=-1;
-        while(fgets(buf,lbuf,f) != NULL) { //read in header sect. including header
-                (*lines)[i]=linesStore+l;
-                int tmp=strlen(buf);
-                strncat((*lines)[i],buf,tmp);
-                if(i!=0) (*lines)[i-1][prevstrlen-1]='\0';
-                prevstrlen=tmp;
-                l+=tmp;
-                ++i;
-        }
-        if((*lines)[i-1][prevstrlen-1]=='\n') (*lines)[i-1][prevstrlen-1]='\0';
-                
-        fprintf(myerr,"readLinesSimple: returning with nlines=%d\n",nlines);
-        return nlines;
-}
-
 //add opt for header to be NULL?
 int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f, FILE* myerr) {
         const int lh=strlen(header);
@@ -788,11 +754,6 @@ int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f
  * with spins that change orientation. ctplus&ctminus
  * are a hack to make the output type compatible with
  * this code's interal representation of the lattice.
- *
- * For analysis that lead to expressions for ct* in
- * version of code which sets solute-solvent interaction
- * to same as solvent-solvent interaction, see pg.13
- * in NBL Lab Notebook 1608- .
  */
 void dumpLammps(lattice c, su s, int ts, int coreNum, FILE* f, FILE* myerr) {
         extern int N,d,Nsu;
@@ -908,84 +869,4 @@ void dumpFI(lattice c, su s, int ts, FILE* f, FILE* myerr) {
                 if(d==2) fprintf(f,"0 "); // make 2D plane in 3D so VMD can visualize in LAMMPS format
                 fprintf(f,"\n");
         }
-}
-
-void loadEwald(double** ewald, int N, char** lines, int nlines) {
-        *ewald=malloc(N*sizeof(**ewald));
-        assert(*ewald!=NULL /*malloc*/);
-        for(int i=0;i<N;++i) {
-                (*ewald)[i]=atof(lines[i]);
-        }
-}
-
-//read in from f in chunks
-//works better than loadEwald()
-//when f is very big
-void loadEwaldChunks(double** ewald, int N, FILE* f) {
-        assert(f!=NULL);
-        *ewald=malloc(N*sizeof(**ewald));
-        assert(*ewald!=NULL /*malloc*/);
-
-        const int chunksize=1024;
-        const int lbuf=32768;
-        char buf[lbuf];
-        memset(buf,'\0',lbuf);
-        int nlines=0,totchars=0;
-        while(fgets(buf,lbuf,f) != NULL) {        //find length of header sect.
-                const int l=strlen(buf);
-                totchars+=l;
-                if(buf[l-1]=='\n') ++nlines;
-        }
-
-        assert(fseek(f,0,SEEK_SET)==0 /*fseek*/);
-        char** lines=malloc(chunksize*sizeof(*lines));
-        char* linesStore=malloc(chunksize*(lbuf+1)*sizeof(linesStore)); //extra nlines for str sep.s '\0'
-        assert(lines!=NULL && linesStore!=NULL /*malloc*/);
-        unsigned long outeri=0;
-        bool run=true;
-        while(run==true) {
-                linesStore[0]='\0'; //so first call of strncat() <-> strncpy()
-                int l=0,prevstrlen=-1;
-                int finalchunk;
-                for(int i=0;i<chunksize;++i) {
-                        const char* ret=fgets(buf,lbuf,f);
-                        if(ret==NULL) {
-                                run=false;
-                                finalchunk=i;
-                                break;
-                        }
-                        lines[i]=linesStore+l;
-                        const int tmp=strlen(buf);
-                        strncat(lines[i],buf,tmp);
-                        if(i!=0) lines[i-1][prevstrlen-1]='\0';
-                        prevstrlen=tmp;
-                        l+=tmp;
-                }
-                if(run==true) {
-                        for(int i=0;i<chunksize;++i) {
-                                (*ewald)[outeri++]=atof(lines[i]);
-                        }
-                }
-                else { //final
-                        for(int i=0;i<finalchunk;++i) {
-                                (*ewald)[outeri++]=atof(lines[i]);
-                        }
-                }
-        }
-        free(linesStore); free(lines);
-}
-
-void dumpEwald(double* ewald, int* L, FILE* f) {
-        fprintf(stderr,"dumpEwald: fn called\n");
-        fflush(stderr);
-        const int d=3;
-        assert(d==3);
-        const int N=L[0]*L[1]*L[2];
-        const int nDig=DBL_DECIMAL_DIG; //from float.h
-        for(int i=0;i<N;++i) {
-                fprintf(f,"%.*e\n",nDig,ewald[i]);
-        }
-        fprintf(stderr,"dumpEwald: post-loop\n");
-        fprintf(stderr,"dumpEwald: work done. exiting fn\n");
-        fflush(stderr);
 }
