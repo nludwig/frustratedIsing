@@ -1,11 +1,12 @@
-/* sections (190425)
- * INPUTS
- * SOLUTE
- * LATTICE
- * SPOOF?
- * SWAP MOVES
- * CLUSTER MOVES
- */
+//******************
+// sections (191001)
+// INPUTS
+// SOLUTE
+// LATTICE
+// SPOOF?
+// SWAP MOVES
+// CLUSTER MOVES
+//******************
 
 #include "headerBundle.h"
 
@@ -36,27 +37,13 @@ int* L=NULL;
 int* bc=NULL;
 int** posArr=NULL;
 
-/*
-double* avg;
-double* accavg;
-double* tot;
-double* acctot;
-*/
 // DONE DEFINING EXT VAR.S
 
 int main(int argc, char* argv[]) {
         pi=acos(-1);
-        //double externholder[8];
-        //for(int i=0;i<8;++i)
-        //        externholder[i]=0.0;
-        //avg=externholder;
-        //tot=externholder+2;
-        //accavg=externholder+4;
-        //acctot=externholder+6;
-
-        /***************************************************************/
-        /*********************** INPUTS ********************************/
-        /***************************************************************/
+        //**************************************************************
+        //********************** INPUTS ********************************
+        //**************************************************************
         // get inputs & assign parameters
         fprintf(stderr,"args:\n");
         for(int i=0;i<argc;++i) fprintf(stderr,"%s ",*(argv+i));
@@ -72,14 +59,13 @@ int main(int argc, char* argv[]) {
         for(int i=0;i<argc;++i) fprintf(stderr,"%s ",*(argv+i));
         fprintf(stderr,"\n");
 
-        /*********************************************************************
-         * pre setup:
-         * -start timer
-         * -setup pointer tracker for easy freeing at end of run
-         * -setup myout & myerr to sidestep need to write to stdout & stderr;
-         *      myout & myerr names based on user input dumpout name
-         *********************************************************************
-         */
+        //********************************************************************
+        // pre setup:
+        // -start timer
+        // -setup pointer tracker for easy freeing at end of run
+        // -setup myout & myerr to sidestep need to write to stdout & stderr;
+        //      myout & myerr names based on user input dumpout name
+        //********************************************************************
         clock_t progStart=time(NULL);
 
         const int totExtPtrs=12; //updating totptrs->totExtPtrs
@@ -89,10 +75,8 @@ int main(int argc, char* argv[]) {
         int nCoresO;
         char* fnames=argv[argc-1];
         char** fname=split(fnames,",",&nCoresO);
+        // done w/ pre-startup
 
-        /***********************/
-        /* done w/ pre-startup */
-        /***********************/
         int verbose=atoi(*(++argv));
         const int lSpoofIn=strlen(*(++argv));
         char* spoofIn=malloc(lSpoofIn+1);
@@ -202,8 +186,6 @@ int main(int argc, char* argv[]) {
         // start RNG: get seeds; init
         int extltmp;
         char** rngSeeds=split(*(++argv), ",", &extltmp);
-        //uint64_t rngseed=atoi(*rngSeeds);
-        //uint64_t rngseq=atoi(*(rngSeeds+1));
         uint64_t rngseed=strtoul(*rngSeeds,NULL,10);
         uint64_t rngseq=strtoul(*(rngSeeds+1),NULL,10);
         free(*rngSeeds);   free(rngSeeds);    rngSeeds=NULL;
@@ -358,9 +340,9 @@ int main(int argc, char* argv[]) {
                 if(sweepsMultIn!=NULL) sweepsMult=atof(sweepsMultIn[ii]);
                 if(kTeffIn!=NULL) kTeff=atof(kTeffIn[ii]);
 
-                /***************************************************************/
-                /*********************** SOLUTE ********************************/
-                /***************************************************************/
+                //**************************************************************
+                //********************** SOLUTE ********************************
+                //**************************************************************
 
                 //functions expect inputs for solutes, etc.; if no
                 //solutes, still pass them a NULL pointer
@@ -465,9 +447,9 @@ int main(int argc, char* argv[]) {
                         fprintf(myerr,"\n");
                 }
 
-                /***************************************************************/
-                /*********************** LATTICE *******************************/
-                /***************************************************************/
+                //**************************************************************
+                //********************** LATTICE *******************************
+                //**************************************************************
                 fprintf(myerr,"\nrngseed,seq: %lu,%lu\n",threadRngSeeds[ii],threadRngSeeds[ii+nCoresP]);
                 pcg32_random_t randomNumberGenerator;
                 pcg32_random_t* rng=&randomNumberGenerator;
@@ -616,9 +598,9 @@ int main(int argc, char* argv[]) {
                 //const int testSeq=2;
                 //pcg32_srandom_r(rng,testSeed,testSeq);
 
-                /***************************************************************/
-                /************************ SPOOF? *******************************/
-                /***************************************************************/
+                //**************************************************************
+                //*********************** SPOOF? *******************************
+                //**************************************************************
                 //"spoof" is an option to, rather than running a fresh simulation,
                 //read in the trajectory info. from a previously run simulation
                 //and output the energies of those config.s according to the
@@ -636,9 +618,9 @@ int main(int argc, char* argv[]) {
                         continue;
                 }
 
-                /***************************************************************/
-                /*********************** SWAP MOVES ****************************/
-                /***************************************************************/
+                //**************************************************************
+                //********************** SWAP MOVES ****************************
+                //**************************************************************
                 
                 double energyHolder[ENERGY_LENGTH]; //hardcode
                 double* en=energyHolder;
@@ -743,9 +725,9 @@ int main(int argc, char* argv[]) {
                         assert(fclose(dumpout)==0);
                         dumpout=NULL;
                 }
-                /***************************************************************/
-                /************************ CLUSTER MOVES ************************/
-                /***************************************************************/
+                //**************************************************************
+                //*********************** CLUSTER MOVES ************************
+                //**************************************************************
 
                 time_t prodStart = time(NULL);
                 if(prodSteps>0) {
