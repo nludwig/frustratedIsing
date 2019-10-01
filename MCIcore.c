@@ -1629,19 +1629,19 @@ double* comOrientationNudge(lattice c, su s, int ind, double* tCom, double** tOr
 //merely to spit out error message and return -1
 //on a fail (no cleanup, etc.)
 //
-//sweepsMult and kTeff, if both non-zero, determine
+//sweepsMult and kTeff_su, if both non-zero, determine
 //the behavior of solvent relaxation built into
 //the solute move.
 //
 //the solvent relaxation is supposed to help increase
 //the probability of successful solute moves. this
-//only happens when kTeff > kT. At low T, solutes have
+//only happens when kTeff_su > kT. At low T, solutes have
 //trouble moving because they disrupt ordered oscill-
 //ations of solvent, but by "locally heating" the
 //solvent, we can, for the right parameters, increase
 //the probability of a successful move.
 
-int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
+int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         void* ptrs[10]; //hardcode
         int nptrs=0;
@@ -1753,7 +1753,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 EsvRelaxi1Full[i]=0.0;
                 #endif
         }
-        if(sweepsMult!=0.0 && kTeff!=0.0) { //relax solvent local to solute
+        if(sweepsMult!=0.0 && kTeff_su!=0.0) { //relax solvent local to solute
                 lattice* coreLat=numToLat(tc,core,(int)lcore);
                 lattice* suLocalRegionLat=NULL;
                 lcore=(uint32_t)localSubset(coreLat,(int)lcore,&suLocalRegionLat);
@@ -1768,7 +1768,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 #if TEST_BUILD
                 energy_full(tc,ts,EsvRelaxi0Full,ewald,p);
                 #endif
-                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff,p,coreNum,rng,myerr);
+                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff_su,p,coreNum,rng,myerr);
                 energy_local(s,EsvRelaxi1,p,coreE,lcoreE); //E_f
                 #if TEST_BUILD
                 energy_full(tc,ts,EsvRelaxi1Full,ewald,p);
@@ -1875,13 +1875,13 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
                 EsvRelaxf1Full[i]=0.0;
                 #endif
         }
-        if(sweepsMult!=0.0 && kTeff!=0.0) { //relax solvent local to solute
+        if(sweepsMult!=0.0 && kTeff_su!=0.0) { //relax solvent local to solute
                 energy_local(s,EsvRelaxf0,p,coreE,lcoreE); //E_i
                 EsvRelaxf0[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
                 #if TEST_BUILD
                 energy_full(tc,ts,EsvRelaxf0Full,ewald,p);
                 #endif
-                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff,p,coreNum,rng,myerr);
+                const int nSucMoves=relaxSvNearSu(tc,ts,core,lcore,ewald,sweepsMult,kTeff_su,p,coreNum,rng,myerr);
                 energy_local(s,EsvRelaxf1,p,coreE,lcoreE); //E_f
                 EsvRelaxf1[6]=(p->Q)*energy_lr_nflip(tc,ewald,core,lcore);
                 #if TEST_BUILD
@@ -1891,13 +1891,13 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
 
         const double deltaEumb=energy_umbr(tu)-energy_umbr(u);
         const double b=p->beta;
-        const double be=1.0/(p->kT+kTeff);
+        const double be=1.0/(p->kT+kTeff_su);
         double betadeltaen=b*deltaEumb;
         double betadeltaE[ENERGY_LENGTH];
         double deltaE[ENERGY_LENGTH];
         double deltaESum=b*deltaEumb;
         for(int i=0;i<ENERGY_LENGTH;++i) {
-                if(sweepsMult!=0.0 && kTeff!=0.0) {
+                if(sweepsMult!=0.0 && kTeff_su!=0.0) {
                         deltaE[i]=EsvRelaxf1[i]-EsvRelaxi0[i];
                 }
                 else {
@@ -1916,7 +1916,7 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         double deltaEFull[ENERGY_LENGTH];
         double deltaEFullSum=b*deltaEumb;
         for(int i=0;i<ENERGY_LENGTH;++i) {
-                if(sweepsMult!=0.0 && kTeff!=0.0) {
+                if(sweepsMult!=0.0 && kTeff_su!=0.0) {
                         deltaEFull[i]=EsvRelaxf1Full[i]-EsvRelaxi0Full[i];
                 }
                 else {
@@ -2097,10 +2097,10 @@ int findVacated(lattice c, lattice tc, su s, su ts, int ind, uint32_t** v) {
         return lv;
 }
 
-int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double* ewald, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
+int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double* ewald, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         const uint32_t itera=(uint32_t)round(lcore*sweepsMult);
         para pEff=copyPara(p);
-        pEff->kT+=kTeff;
+        pEff->kT+=kTeff_su;
         pEff->beta=1.0/pEff->kT;
         int nSucMoves=0;
         for(uint32_t i=0;i<itera;++i) {
@@ -2127,10 +2127,10 @@ int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double* ewa
 }
 
 #if EQUI_INNER_DUMP
-int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, int enFreq, int dumpFreq, int suComFreq, int umbrFreq, int dataFreq, FILE* dumpout, char* prefix, int outerN, bool outputStyleFI, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
+int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, int enFreq, int dumpFreq, int suComFreq, int umbrFreq, int dataFreq, FILE* dumpout, char* prefix, int outerN, bool outputStyleFI, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
 #endif
 #if !EQUI_INNER_DUMP
-int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
+int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
 #endif
         #if EQUI_INNER_DUMP
         extern int d;
@@ -2170,7 +2170,7 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
                                         }
                                 }
                                 #endif
-                                const int mvSuccess=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff,p,coreNum,rng,myerr);
+                                const int mvSuccess=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff_su,p,coreNum,rng,myerr);
                                 if(mvSuccess>0) ++nmoves[2];
                                 ++nmoves[3];
                         }
@@ -2242,7 +2242,7 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
         return nmoves;
 }
 
-int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff, para p, int coreNum, pcg32_random_t* rng, FILE* mvstats, FILE* myerr) {
+int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* mvstats, FILE* myerr) {
         extern int N,Nsu;
         const int mvtypes=2*3; //hardcode
         const int cStepsPerSweep=100; //hardcode
@@ -2269,7 +2269,7 @@ int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb 
                 else { //in solute: solute move
                         const double roll=(double)pcg32_random_r(rng)/UINT32_MAX;
                         if(roll<=s[c[ind].su].mvProb) {
-                                const int mvSuccess=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff,p,coreNum,rng,myerr);
+                                const int mvSuccess=suMove(c,tc,s,ts,u,tu,E,c[ind].su,ewald,inshlopt,rotation,sweepsMult,kTeff_su,p,coreNum,rng,myerr);
                                 if(mvSuccess>0) ++nmoves[2];
                                 ++nmoves[3];
                         }

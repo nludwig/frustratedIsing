@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
         const int nargs=21;
         if(argc != nargs) {
                 fprintf(stderr,"incorrect num. args (%d instead of %d); usage:\n",argc,nargs);
-                fprintf(stderr,"./MCIsing verbose?(0/1) spoof?(0/in.lammpstrj) neutralOverallOnSoluteInsertion?(0/1) rotation?(0/1) N L0,L1,L2 sigma parametersIn0,1,.. dataIn0,1,..(or'none') sweepsMult0,1,..(or0.0) +kTeff0,1,..(or0.0) enFreq dumpFreq dataFreq suComFreq umbrFreq equiSteps prodSteps rngSeed,rngSeq confDump0,1,..\n");
+                fprintf(stderr,"./MCIsing verbose?(0/1) spoof?(0/in.lammpstrj) neutralOverallOnSoluteInsertion?(0/1) rotation?(0/1) N L0,L1,L2 sigma parametersIn0,1,.. dataIn0,1,..(or'none') sweepsMult0,1,..(or0.0) +kTeff_su0,1,..(or0.0) enFreq dumpFreq dataFreq suComFreq umbrFreq equiSteps prodSteps rngSeed,rngSeq confDump0,1,..\n");
                 return 1;
         }
 
@@ -159,10 +159,10 @@ int main(int argc, char* argv[]) {
         }
         else nCoresS=nCoresP;
 
-        char* kTeffInputStr=*(++argv);
-        char** kTeffIn=NULL;
-        if(strcmp(kTeffInputStr,"0.0")!=0) {
-                kTeffIn=split(kTeffInputStr,",",&nCoresK);
+        char* kTeff_suInputStr=*(++argv);
+        char** kTeff_suIn=NULL;
+        if(strcmp(kTeff_suInputStr,"0.0")!=0) {
+                kTeff_suIn=split(kTeff_suInputStr,",",&nCoresK);
                 if(nCoresK!=nCoresP) {
                         fprintf(stderr,"nCoresK!=nCoresP: %d!=%d. exiting\n",nCoresK,nCoresP);
                 }
@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
         extPtrs[nExtPtrs++]=parasIn;
         extPtrs[nExtPtrs++]=datasIn;
         extPtrs[nExtPtrs++]=sweepsMultIn;
-        extPtrs[nExtPtrs++]=kTeffIn;
+        extPtrs[nExtPtrs++]=kTeff_suIn;
 
         int enFreq=atoi(*(++argv));
         int dumpFreq=atoi(*(++argv));
@@ -338,9 +338,9 @@ int main(int argc, char* argv[]) {
                 }
                 else    datain=0;
 
-                double sweepsMult=0.0,kTeff=0.0;
+                double sweepsMult=0.0,kTeff_su=0.0;
                 if(sweepsMultIn!=NULL) sweepsMult=atof(sweepsMultIn[ii]);
-                if(kTeffIn!=NULL) kTeff=atof(kTeffIn[ii]);
+                if(kTeff_suIn!=NULL) kTeff_su=atof(kTeff_suIn[ii]);
 
                 //**************************************************************
                 //********************** SOLUTE SETUP **************************
@@ -671,12 +671,12 @@ int main(int argc, char* argv[]) {
                         for(int i=0;i<equiSteps;++i) {
                                 #if EQUI_INNER_DUMP
                                 mvtmp=MCstep_flipswap(lat,triallat,en,solutes,trialsolutes,umbr,tumbr,ewald,inshlopt,rotationOpt,sweepsMult,\
-                                                      kTeff,p,ii,rng,enFreq,dumpFreq,suComFreq,umbrFreq,dataFreq,dumpout,prefix,i,\
+                                                      kTeff_su,p,ii,rng,enFreq,dumpFreq,suComFreq,umbrFreq,dataFreq,dumpout,prefix,i,\
                                                       outputStyleFI,myout,myumbout,mySuComOut,myerr);
                                 #endif
                                 #if !EQUI_INNER_DUMP
                                 mvtmp=MCstep_flipswap(lat,triallat,en,solutes,trialsolutes,umbr,tumbr,ewald,inshlopt,rotationOpt,sweepsMult,\
-                                                      kTeff,p,ii,rng,myout,myumbout,mySuComOut,myerr);
+                                                      kTeff_su,p,ii,rng,myout,myumbout,mySuComOut,myerr);
                                 #endif
                                 for(int j=0;j<mvtypes;++j) nmoves[j]+=mvtmp[j];
                                 free(mvtmp);    mvtmp=NULL;
@@ -753,7 +753,7 @@ int main(int argc, char* argv[]) {
                         for(int j=0;j<mvtypes;++j) nmoves[j]=0;
                         for(int i=0;i<prodSteps;++i) {
                                 mvtmp=MCstep_cluster(lat,triallat,en,solutes,trialsolutes,umbr,tumbr,ewald,\
-                                                     inshlopt,rotationOpt,sweepsMult,kTeff,p,ii,rng,mvstats,myerr);
+                                                     inshlopt,rotationOpt,sweepsMult,kTeff_su,p,ii,rng,mvstats,myerr);
                                 for(int j=0;j<mvtypes;++j) nmoves[j]+=mvtmp[j]; // hardcode
                                 free(mvtmp);    mvtmp=NULL;
                                 if(i%enFreq==0) {
