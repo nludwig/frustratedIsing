@@ -4,6 +4,7 @@
 //****** solute (su) related ***
 //******************************
 
+//set relative position vectors for each solute during setup
 int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int Nsu,shlL,d;
         int comPH=0;
@@ -186,7 +187,7 @@ int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, int coreNum, 
                         else if(origVal==suMinusCharge) delSuMinus-=1;
                 }
         }
-        const int ntypes=5;
+        const int ntypes=5; //for neutralization: +,-,0,su+,su-
         int del[]={delPlus,delMinus,delZero,delSuPlus,delSuMinus};
         double charges[]={plusCharge,minusCharge,0.0,suPlusCharge,suMinusCharge};
         fprintf(myerr,"setSuRelPot: placing su.s lead to delPlus,delMinus,delZero,delSuPlus,delSuMinus: ");
@@ -251,11 +252,9 @@ int setSuRelPos(lattice c, su s, int inshlopt, int neutralOverall, int coreNum, 
         return (int)round(ret);
 }
 
-//each type goes to next in line
-//(ie. + -> -, - -> 0, ...)
-//rather than set order
-//(ie. +,-,0,..)
-//to further randomize IC
+//neutralize lattice assuming (191001) types are
+//+, -, 0, and su +, -
+//ntypes = 5 (currently 191001)
 //del = [delPlus,delMinus,delZero,delSuPlus,delSuMinus,..]
 //charges = [plusCharge,minusCharge,0.0,suPlusCharge,suMinusCharge]
 void neutralizeStep(lattice c, int rand, int* del, double* charges, int ntypes) {
@@ -281,9 +280,8 @@ void neutralizeStep(lattice c, int rand, int* del, double* charges, int ntypes) 
         }
 }
 
-//take COM & rel. pos.s, and find
-//positions on lattice
-//
+//take COM, orientation, & rel. pos.s:
+//update current position of su ind.
 //com either double* of length d or
 //NULL; NULL -> use s[ind].com as com
 void updSuCurPos(lattice c, su s, int ind, double* com) {
@@ -304,6 +302,7 @@ void updSuCurPos(lattice c, su s, int ind, double* com) {
         }
 }
 
+//update the su status of each lattice site
 void updLatSuStatus(lattice c, su s) {
         extern int N,Nsu;
         for(int i=0;i<N;++i) c[i].su=-1;
@@ -314,6 +313,7 @@ void updLatSuStatus(lattice c, su s) {
         }
 }
 
+//update the hydrophobic status of each lattice site
 void updLatHydrophobicStatus(lattice c, su s) {
         extern int N,Nsu;
         for(int i=0;i<N;++i) c[i].hydrophobic=false;
@@ -333,6 +333,7 @@ void updSuCurPos_latSuStatus(lattice c, su s, int ind) {
         updLatSuStatus(c,s);
 }
 
+//return bool: whether there are any hydrophobic sites on the lattice
 bool setHydrophobicExist(su s) {
         extern int Nsu;
         bool ret=false;
@@ -408,6 +409,8 @@ int checkSuOverlap(su s, int ind, int inshlopt) {
 //*******     core      ********
 //******************************
 
+//maintain the neutrality of the lattice
+//
 //lc length of c or -1 -> use N as lc
 //dZero desired number of zeros in system
 //      or -1 if use nZeroSites
@@ -532,12 +535,13 @@ int maintainChargeNeut(lattice c, uint32_t* ii, int lii, int chgSwitch, int* dPl
         return 0;
 }
 
-//set lattice to init value: no solutes
+//set su values on lattice to init value: no solutes (==-1)
 void setLatInitSu(lattice c) {
         extern int N;
         for(int i=0;i<N;++i) c[i].su=-1;
 }
 
+//will proposed lattice from .para file be charge neutral?
 int willParaLatBeChargeNeut(int coreNum) {
         extern int *nPlusSvSites,*nMinusSvSites,*nPlusSuSites,*nMinusSuSites;
         extern double plusCharge,minusCharge;
@@ -547,6 +551,7 @@ int willParaLatBeChargeNeut(int coreNum) {
         else                                   return 0;
 }
 
+//initialize lattice to charge neutral, mixed state
 double* setLatVal_rand(lattice c, su s, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int N,Nsu;
         extern int* bc;
@@ -796,6 +801,7 @@ double* setLatVal_rand(lattice c, su s, int coreNum, pcg32_random_t* rng, FILE* 
         return NULL;
 }
 
+//initialize lattice using lines read in from .data file
 double* setLatVal_data(lattice c, char** lines, int nlines, int coreNum, FILE* myerr) {
         extern int N;
         int i=0;
@@ -819,6 +825,7 @@ double* setLatVal_data(lattice c, char** lines, int nlines, int coreNum, FILE* m
         return checkCharge(c,N,NULL);
 }
 
+//set up neighbors on lattice
 void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
         extern int N,d;
         int totCoulNeigh=0;
@@ -843,7 +850,7 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
         fprintf(myerr,"setLatNeigh_coul: NNs: %d\tcoul neighbors:%d\ttotal neighbors (two-way): %d\n",2*d*N,totCoulNeigh,2*d*N+totCoulNeigh);
 
         //init
-        const int NNN=2*d;       //number nearest neighbors is 2 * d
+        const int NNN=2*d; //number nearest neighbors is 2 * d
         lattice* neighHolder=malloc((NNN*N+totCoulNeigh)*sizeof(*neighHolder));
         assert(neighHolder!=NULL /*malloc*/);
         double* distInvErfcHolder=NULL;
@@ -870,7 +877,7 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
         extern double pi;
         int coulNeighCt=0;
         for(int i=0;i<N;++i) {
-                c[i].nearNeigh=(neighHolder+i*NNN+coulNeighCt);  //first NNN of each neigh block are NN
+                c[i].nearNeigh=(neighHolder+i*NNN+coulNeighCt); //first NNN of each neigh block are NN
                 for(int e=-d;e<d;++e) { // [-d,-1] neg. dir., [0,d) pos. w/ -1:0,...,-d:(d-1)
                         neighHolder[(e+d)+i*NNN+coulNeighCt]=getNNLat(c,i,e);
                 }
@@ -890,10 +897,10 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
                                         }
                                         neighHolder[(i+1)*NNN+coulNeighCt]=(c+neigh); //first NNN of each neigh block are NN
                                         #if SHIFT_COUL
-                                        distInvErfcHolder[coulNeighCt]=erfc(r/(p->sigma))/r - p->e_cut;  //truncated&shifted
+                                        distInvErfcHolder[coulNeighCt]=erfc(r/(p->sigma))/r - p->e_cut; //truncated&shifted
                                         #endif
                                         #if !SHIFT_COUL
-                                        distInvErfcHolder[coulNeighCt]=erfc(r/(p->sigma))/r;             //truncated
+                                        distInvErfcHolder[coulNeighCt]=erfc(r/(p->sigma))/r; //truncated
                                         #endif
                                         ++coulNeighCt;
                                         ++(c[i].nCoulNeigh);
@@ -921,6 +928,8 @@ void** setLatNeigh_coul_twoway(lattice c, para p, FILE* myerr) {
         return ptrs;
 }
 
+//pre-compute Ewald summation: long-range/Fourier part of electrostatic interaction;
+//occurs only once at startup; uses nCoresP threads
 double* setupEwald(int* L, double sigma, int nCoresP) {
         fprintf(stderr,"setupEwald: fn called\n");
         fflush(stderr);
@@ -1092,6 +1101,7 @@ int localSubset(lattice* core, int lcore, lattice** subset) {
         return lsubset;
 }
 
+//return lattice pointers corresponding to uint32_t nums
 lattice* numToLat(lattice c, uint32_t* nums, uint32_t nnums) {
         lattice* lat=malloc(nnums*sizeof(*lat));
         assert(lat!=NULL /*malloc*/);
@@ -1099,6 +1109,7 @@ lattice* numToLat(lattice c, uint32_t* nums, uint32_t nnums) {
         return lat;
 }
 
+//return uint32_t nums corresponding to lattice sites
 uint32_t* latToNum(lattice c, lattice* sites, int nsites) {
         uint32_t* nums=malloc(nsites*sizeof(*nums));
         assert(nums!=NULL);
@@ -1106,6 +1117,8 @@ uint32_t* latToNum(lattice c, lattice* sites, int nsites) {
         return nums;
 }
 
+//implements nearest-neighbor spin swap
+//(pick random neighbor of ind, attempt swap if different from ind)
 int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double* ewald, para p, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         uint32_t ind2=pcg32_boundedrand_r(rng,2*d);
@@ -1192,13 +1205,15 @@ int spinSwapMoveNN(lattice c, lattice tc, su s, double* E, int ind, double* ewal
         }
 }
 
-// NOTE: contrary to usual convention,
-// 1 => move sucessful; 0 => move rejected 
+//attempt swap of site at ind with random site, if different
 //
-// Assumes ind is not in solute (this assumption
-// holds when sv vs su move is picked based
-// on whether the cell is in solute or not: see
-// MCstep)
+//NOTE: contrary to usual convention,
+//1 => move sucessful; 0 => move rejected 
+//
+//Assumes ind is not in solute (this assumption
+//holds when sv vs su move is picked based
+//on whether the cell is in solute or not: see
+//MCstep)
 int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double* ewald, para p, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         uint32_t ind2=pcg32_boundedrand_r(rng, N);
@@ -1290,37 +1305,37 @@ int spinSwapMove(lattice c, lattice tc, su s, double* E, int ind, double* ewald,
         }
 }
 
-// make a cluster move as discussed in Grousson, Viot 2001.
-// ind is seed0; find seed1 by randomly selecting a center/
-// pivor and rotation axis, then rotating seed1 \pi about
-// that pivot/axis. If seed0, seed1 have opposite sign,
-// start building clusters.
-// Clusters are built by considering NNs of each current
-// seed. We wish to construct clusters of same spins, and
-// each cluster with the same number of spins, so that a
-// cluster move will not change the net charge of the sys.
-// To avoid excessive numbers of operations to build clusters,
-// we build by adding NNs, rather than all neighbors. Walk
-// through NNs of seeds in random order; if roll p in [0,1)
-// less than 1-exp(-4*betaEff_clst*J), add the considered NNs to
-// each cluster & to the stack. Once all possible additions
-// are attempted for a given seed, move to the next seed
-// pair in the stack. Once clusters are built, we need to
-// compare energies as usual to determine whether to accept
-// the move. Because of the exotic nature of this cluster
-// move, the probability of acceptance is:
+//make a cluster move as discussed in Grousson, Viot 2001.
+//ind is seed0; find seed1 by randomly selecting a center/
+//pivor and rotation axis, then rotating seed1 \pi about
+//that pivot/axis. If seed0, seed1 have opposite sign,
+//start building clusters.
+//Clusters are built by considering NNs of each current
+//seed. We wish to construct clusters of same spins, and
+//each cluster with the same number of spins, so that a
+//cluster move will not change the net charge of the sys.
+//To avoid excessive numbers of operations to build clusters,
+//we build by adding NNs, rather than all neighbors. Walk
+//through NNs of seeds in random order; if roll p in [0,1)
+//less than 1-exp(-4*betaEff_clst*J), add the considered NNs to
+//each cluster & to the stack. Once all possible additions
+//are attempted for a given seed, move to the next seed
+//pair in the stack. Once clusters are built, we need to
+//compare energies as usual to determine whether to accept
+//the move. Because of the exotic nature of this cluster
+//move, the probability of acceptance is:
 //
-// 1            if      (\deltaE_1^{ji}+(1-\betaEff_clst/\beta)*\deltaE_0^{ji})<0
-// exp(-\beta(\deltaE_1^{ji}+(1-\betaEff_clst/\beta)*\deltaE_0^{ji}))        else
+//1            if      (\deltaE_1^{ji}+(1-\betaEff_clst/\beta)*\deltaE_0^{ji})<0
+//exp(-\beta(\deltaE_1^{ji}+(1-\betaEff_clst/\beta)*\deltaE_0^{ji}))        else
 //
-// where E_0 is the NN part of the Ising Hamiltonian, and
-// E_1 is the other part (here, the screened Coulomb part).
-
+//where E_0 is the NN part of the Ising Hamiltonian, and
+//E_1 is the other part (here, the screened Coulomb part).
+//
 //built for fully occupied lattice (ie. each
-//site it +1 or -1). need to rewrite if want
+//site is +1 or -1). need to rewrite if want
 //to expand to case with defects (0's) or
-//more general solvent types (+2, -1, or di-
-//fferent shapes, etc etc)
+//more general solvent types (+2, -1, or
+//different shapes, etc etc)
 int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, double* ewald, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N,Nsu;
         extern int* L;
@@ -1458,6 +1473,9 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
         }
 }
 
+//supporting function to clusterMove().
+//builds out clusters given sites ind0,ind1
+//
 //suBlocks tracks number of submoves blocked because ONLY one
 //of the NNs is a su. When this occurs, the submove is auto.
 //rejected, but there is a cost incurred. Half of the cost
@@ -1469,7 +1487,7 @@ int clusterMove(lattice c, lattice tc, su s, double* E, const uint32_t ind0, dou
 //ster are tracked by subtracting 1 from suBlocks. The energy
 //cost is computed in clusterMove and is:
 //+2*J*suBlocks
-
+//
 //built for fully occupied lattice (ie. each
 //site it +1 or -1). need to rewrite if want
 //to expand to case with defects (0's) or
@@ -1551,7 +1569,20 @@ uint32_t* buildCluster(lattice c, const uint32_t ind0, const uint32_t ind1, cons
         return inCluster;
 }
 
-//if su is asymmetric and rotates, may need nudge back onto lattice
+//if su is asymmetric and rotates, may need "nudge" back onto lattice.
+//for example, consider a 1x1x2 rectangular su with orientation
+//1 0 0
+//0 1 0
+//0 0 1
+//the center of mass in
+//x- and y-axes will have an integer value; in the z-axis it will have an integer+0.5 value.
+//if rotation to orientation
+//1 0 0
+//0 0 1
+//0 1 0
+//occurs, the y-axis value must now be integer+0.5 and the z-axis value must
+//be integer in order for the solute to occupy lattice sites properly. this
+//function provides a stochastic "nudge" to ensure solute is properly on the lattice
 double* comOrientationNudge(lattice c, su s, int ind, double* tCom, double** tOrientation, pcg32_random_t* rng, FILE* myerr) {
         extern int d;
         const int nsites=s[ind].nsites, ninshl=s[ind].ninshl;
@@ -1605,9 +1636,6 @@ double* comOrientationNudge(lattice c, su s, int ind, double* tCom, double** tOr
         }
 }
 
-//NOTE: contrary to usual convention,
-//1 => move sucessful; 0 => move rejected 
-//
 //suMove (soluteMove) tuned for use in Frustrated Ising
 //system. Observation: charged solutes will have
 //tendency to be surrounded by, first, a nearly
@@ -1640,7 +1668,6 @@ double* comOrientationNudge(lattice c, su s, int ind, double* tCom, double** tOr
 //ations of solvent, but by "locally heating" the
 //solvent, we can, for the right parameters, increase
 //the probability of a successful move.
-
 int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         extern int d,N;
         void* ptrs[10]; //hardcode
@@ -2017,7 +2044,8 @@ int suMove(lattice c, lattice tc, su s, su ts, umb u, umb tu, double* E, int ind
         }
 }
 
-//union
+//union of current and proposed su positions for computation of
+//local energy change
 uint32_t buildSuMoveCore(lattice c, lattice tc, su s, su ts, int ind, uint32_t** core) {
         const int nsites=s[ind].nsites, ninshl=s[ind].ninshl;
         int lcore=2*(nsites+ninshl);
@@ -2038,6 +2066,7 @@ uint32_t buildSuMoveCore(lattice c, lattice tc, su s, su ts, int ind, uint32_t**
         return lcore;
 }
 
+//to core, add all unique nearest neighbors
 uint32_t addNNToCore(lattice c, su s, uint32_t** core, uint32_t lcore) {
         extern int d;
         (*core)=realloc((*core),((2*d+1)*lcore)*sizeof(**core));
@@ -2056,6 +2085,7 @@ uint32_t addNNToCore(lattice c, su s, uint32_t** core, uint32_t lcore) {
         return lcore;
 }
 
+//to core, add all unique nearest neighbors
 uint32_t* addNNToCore_toNewArr(lattice c, su s, uint32_t* core, uint32_t* lcore) {
         uint32_t* coreNew=malloc((*lcore)*sizeof(*coreNew));
         for(int i=0;i<*lcore;++i) coreNew[i]=core[i];
@@ -2063,7 +2093,10 @@ uint32_t* addNNToCore_toNewArr(lattice c, su s, uint32_t* core, uint32_t* lcore)
         return coreNew;
 }
 
-//intersection
+//difference of proposed and current su position
+//to find sites which would be vacated in proposed move
+//(these sites may be flipped to maintain charge neutrality
+//depending on values of displaced sites)
 int findVacated(lattice c, lattice tc, su s, su ts, int ind, uint32_t** v) {
         const int nsites=s[ind].nsites, ninshl=s[ind].ninshl;
         const int lmax=nsites+ninshl;
@@ -2097,6 +2130,20 @@ int findVacated(lattice c, lattice tc, su s, su ts, int ind, uint32_t** v) {
         return lv;
 }
 
+//relax solvent near solute before & after proposed move
+//(both before & after to symmetrize to satisfy detailed balance)
+//
+//sweepsMult and kTeff_su, if both non-zero, determine
+//the behavior of solvent relaxation built into
+//the solute move.
+//
+//the solvent relaxation is supposed to help increase
+//the probability of successful solute moves. this
+//only happens when kTeff_su > kT. At low T, solutes have
+//trouble moving because they disrupt ordered oscill-
+//ations of solvent, but by "locally heating" the
+//solvent, we can, for the right parameters, increase
+//the probability of a successful move.
 int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double* ewald, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* myerr) {
         const uint32_t itera=(uint32_t)round(lcore*sweepsMult);
         para pEff=copyPara(p);
@@ -2126,6 +2173,7 @@ int relaxSvNearSu(lattice tc, su ts, uint32_t* core, uint32_t lcore, double* ewa
         return nSucMoves;
 }
 
+//run one swap move sweep
 #if EQUI_INNER_DUMP
 int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, int enFreq, int dumpFreq, int suComFreq, int umbrFreq, int dataFreq, FILE* dumpout, char* prefix, int outerN, bool outputStyleFI, FILE* myout, FILE* myumbout, FILE* mySuComOut, FILE* myerr) {
 #endif
@@ -2242,6 +2290,7 @@ int* MCstep_flipswap(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb
         return nmoves;
 }
 
+//run one "cluster sweep"
 int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb tu, double* ewald, int inshlopt, bool rotation, double sweepsMult, double kTeff_su, para p, int coreNum, pcg32_random_t* rng, FILE* mvstats, FILE* myerr) {
         extern int N,Nsu;
         const int mvtypes=2*3; //hardcode
@@ -2291,6 +2340,11 @@ int* MCstep_cluster(lattice c, lattice tc, double* Ein, su s, su ts, umb u, umb 
 //*******    SPOOF      ********
 //******************************
 
+//run spoof rather than simulation:
+//take input trajectory and compute
+//and output energies at each state
+//given .para input
+//
 //compare trj header with input N, L
 //loop:
 //-read step
@@ -2322,6 +2376,8 @@ void runSpoof(lattice c, su s, double* ewald, para p, umb u, FILE* f, FILE* myou
         free(lines);
 }
 
+//support function for runSpoof():
+//set up trj file for reading
 int prepForReadTrj(int* nlines, int* nchars, FILE* f) {
         const int lbuf=1024;
         char* buf=malloc(lbuf);
@@ -2367,6 +2423,8 @@ int prepForReadTrj(int* nlines, int* nchars, FILE* f) {
         return *nlines/(N+header);
 }
 
+//support function for runSpoof():
+//read one step from trj file
 int readTrjStep(char*** lines, char* linesHolder, FILE* f) {
         const int lbuf=1024;
         char* buf=malloc(lbuf);

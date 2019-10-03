@@ -1,5 +1,26 @@
 #include "energy.h"
 
+//functions for computing the energy given a lattice
+//configuration and set of parameters. minor variations
+//in functions to allow for different interaction energies
+//controlled by pre-processor switches found in switches.h.
+//
+//for standard, FI usage, the main functions that will be
+//called are
+//-energy_full() which computes the energy
+//of the entire lattice;
+//-energy_lr() which computes the long-range/Fourier space
+//part of the electrostatic energy of the entire lattice;
+//-energy_local() which computes the short-range/real space
+//part of the energy of a local region of the lattice
+//(quicker than computing entire lattice energy when only
+//local changes have been made, such as a swap move, cluster
+//move or solute move);
+//-energy_lr_nflip() which computes the long-range/Fourier
+//space part of the electrostatic energy for the n input
+//charges, and is also quicker than recomputing for the
+//entire lattice
+
 ////////////////////////////////////////
 //ENERGY FUNCTIONS WITH ISING ENERGIES//
 ////////////////////////////////////////
@@ -8,6 +29,7 @@
 //USE RAW Q+, Q- TO COMPUTE ISING ENERGIES//
 ////////////////////////////////////////////
 #if !ISI_USE_SIGN
+//compute Ising "fluid-fluid" energy of entire lattice
 double energy_ising_full(lattice c, su s, double* E, para p) {
         extern int N,d;
         const int NNN=2*d;
@@ -41,6 +63,7 @@ double energy_ising_full(lattice c, su s, double* E, para p) {
         return -(p->J)*(e_i+e_isu);
 }
 
+//compute Ising "fluid-solute" energy of entire lattice
 double energy_ising_su(lattice c, su s, para p) {
         extern int N,d;
         const int NNN=2*d;
@@ -66,6 +89,7 @@ double energy_ising_su(lattice c, su s, para p) {
         return -(p->J)*e_isu*0.5;
 }
 
+//compute Ising "fluid-solute" energy of local region
 double energy_ising_su_local(su s, para p, lattice* subset, int lsubset) {
         extern int d;
         const int NNN=2*d;
@@ -91,6 +115,7 @@ double energy_ising_su_local(su s, para p, lattice* subset, int lsubset) {
         return -(p->J)*e_isu*0.5;
 }
 
+//compute Ising and electrostatic energy of entire lattice
 double energy_full(lattice c, su s, double* E, double* ewald, para p) {
         extern double pi;
         #if SHIFT_COUL
@@ -226,6 +251,7 @@ double energy_full(lattice c, su s, double* E, double* ewald, para p) {
         return e_isvsv+e_isvsu+e_isusu+e_csrsvsv+e_csrsvsu+e_csrsusu+e_clr+e_ihh+e_isvh+e_isuh;
 }
 
+//compute Ising and electrostatic energy of local region
 double energy_local(su s, double* E, para p, lattice* subset, int lsubset) {
         extern double pi;
         #if SHIFT_COUL
@@ -365,6 +391,7 @@ double energy_local(su s, double* E, para p, lattice* subset, int lsubset) {
 // q- -> ISI_SPIN_DN                        //
 //////////////////////////////////////////////
 #if ISI_USE_SIGN
+//compute Ising "fluid-fluid" energy of entire lattice
 double energy_ising_full(lattice c, su s, double* E, para p) {
         extern int N,d;
         const int NNN=2*d;
@@ -413,6 +440,7 @@ double energy_ising_full(lattice c, su s, double* E, para p) {
         return -(p->J)*(e_i+e_isu);
 }
 
+//compute Ising "fluid-solute" energy of entire lattice
 double energy_ising_su(lattice c, su s, para p) {
         extern int N,d;
         const int NNN=2*d;
@@ -449,6 +477,7 @@ double energy_ising_su(lattice c, su s, para p) {
         return -(p->J)*e_isu*0.5;
 }
 
+//compute Ising "fluid-solute" energy of local region
 double energy_ising_su_local(su s, para p, lattice* subset, int lsubset) {
         extern int d;
         const int NNN=2*d;
@@ -485,6 +514,7 @@ double energy_ising_su_local(su s, para p, lattice* subset, int lsubset) {
         return -(p->J)*e_isu*0.5;
 }
 
+//compute Ising and electrostatic energy of entire lattice
 double energy_full(lattice c, su s, double* E, double* ewald, para p) {
         extern double pi;
         #if SHIFT_COUL
@@ -649,6 +679,7 @@ double energy_full(lattice c, su s, double* E, double* ewald, para p) {
         return e_isvsv+e_isvsu+e_isusu+e_csrsvsv+e_csrsvsu+e_csrsusu+e_clr+e_ihh+e_isvh+e_isuh;
 }
 
+//compute Ising and electrostatic energy of local region
 double energy_local(su s, double* E, para p, lattice* subset, int lsubset) {
         extern double pi;
         #if SHIFT_COUL
@@ -814,6 +845,8 @@ double energy_local(su s, double* E, para p, lattice* subset, int lsubset) {
 //NON-ISING ENERGY FUNCTIONS//
 //////////////////////////////
 
+//compute long-range/Fourier space part of electrostatic
+//interaction over entire lattice
 double energy_lr(lattice c, double* ewald) {
         #if !FFT_ON
         return 0.0;
@@ -848,6 +881,8 @@ int getEwaldIndexForRij(int i, int j) {
         return n;
 }
 
+//compute long-range/Fourier space part of electrostatic
+//interaction over spins k
 double energy_lr_nflip(lattice c, double* ewald, uint32_t* k, int nk) {
         #if !FFT_ON
         return 0.0;
@@ -910,6 +945,7 @@ double energy_lr_nflip(lattice c, double* ewald, uint32_t* k, int nk) {
         return 4.0*pi*ElrSum/N;
 }
 
+//compute energy of umbrellas u
 double energy_umbr(umb u) {
         if(u==NULL) return 0.0;
         double e_u=0.0;

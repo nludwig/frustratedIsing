@@ -1,5 +1,7 @@
 #include "shapes.h"
 
+//build xyz positions of equally-spaced sites
+//composing cube with sides of length l
 int** buildCube(int l) {
         extern int d;
         int nsites=1;
@@ -22,6 +24,8 @@ int** buildCube(int l) {
         return sites;
 }
 
+//build xyz positions of equally-spaced sites
+//composing rect with sides of length *l
 int** buildRectangle(int* l) {
         extern int d;
         int nsites=1;
@@ -44,6 +48,8 @@ int** buildRectangle(int* l) {
         return sites;
 }
 
+//find site numbers (row-major) of interface of shape: positions
+//are integer values that are NNs of shape but not in shape
 int* getShapeInterface(int** shape, int nsites, int* ninterface, int** Lcube, int* border) {
         extern int d;
         *Lcube=embedShapeInCube(shape,nsites,border);
@@ -70,6 +76,8 @@ int* getShapeInterface(int** shape, int nsites, int* ninterface, int** Lcube, in
         return nnList;
 }
 
+
+//find number of positions in interface of shape
 int getSA(int** shape, int nsites, int** Lcube, int* border) {
         int SA;
         int* interface=getShapeInterface(shape,nsites,&SA,Lcube,border);
@@ -77,6 +85,8 @@ int getSA(int** shape, int nsites, int** Lcube, int* border) {
         return SA;
 }
 
+//find positions of interface of shape: integer
+//values that are NNs of shape but not in shape
 int** getShapeInterfacePos(int** shape, int nsites, int* ninterface, int** Lcube, int* border) {
         int* interface=getShapeInterface(shape,nsites,ninterface,Lcube,border);
         extern int d;
@@ -93,7 +103,7 @@ int** getShapeInterfacePos(int** shape, int nsites, int* ninterface, int** Lcube
         return interShape;
 }
 
-
+//return only unique values in array of ints.
 //assumes *arr is sorted
 int uniqueint(int** arr, int larr) {
         int i=0,j=1;
@@ -105,6 +115,8 @@ int uniqueint(int** arr, int larr) {
         return i+1;
 }
 
+//return only unique values in array of uint32_ts.
+//assumes *arr is sorted
 int uniqueuint32_t(uint32_t** arr, int larr) {
         int i=0,j=1;
         while(i<larr) {
@@ -115,6 +127,8 @@ int uniqueuint32_t(uint32_t** arr, int larr) {
         return i+1;
 }
 
+//return only unique values in array of lattices.
+//assumes *arr is sorted
 int uniquelattice(lattice** arr, int larr) {
         int i=0,j=1;
         while(i<larr) {
@@ -129,6 +143,7 @@ int uniquelattice(lattice** arr, int larr) {
         return i+1;
 }
 
+//return bounds of minimal cube that will enclose shape
 int* enclosingCubeSize(int** shape, int nsites)
         //find maxes
         extern int d;
@@ -177,6 +192,8 @@ int** buildNeighCube(double Rc) {
         return cube;
 }
 
+//return diff of two int lists
+//
 //assumptions:
 //1) a,b sorted
 //2) a,b unique (no repeats w/in a or w/in b)
@@ -209,6 +226,8 @@ int diff(int** a, int la, int** b, int lb) {
         }
 }
 
+//if M is a (d,d) matrix and v is a (d) vector,
+//returns Mv = M_{ij} v_j, using Einstein notation
 double* matrixOnVector(double** M, double* v) {
         extern int d;
         double* u=malloc(d*sizeof(*u));
@@ -222,6 +241,8 @@ double* matrixOnVector(double** M, double* v) {
         return u;
 }
 
+//if M is a (d,d) matrix and v is a (d) vector,
+//returns Mv = M_{ij} v_j, using Einstein notation
 void matrixOnVectorInPlace(double** M, double* v) {
         double* u=matrixOnVector(M,v);
         extern int d;
@@ -229,6 +250,8 @@ void matrixOnVectorInPlace(double** M, double* v) {
         free(u);
 }
 
+//if M1 is a (d,d) matrix and M2 is a (d,d matrix,
+//returns M1M2 = M1_{ij} M2_{jk}, using Einstein notation
 double** matrixOnMatrix(double** M1, double** M2) {
         extern int d;
         double* Ahold=malloc(d*d*sizeof(*Ahold));
@@ -250,6 +273,8 @@ double** matrixOnMatrix(double** M1, double** M2) {
         return A;
 }
 
+//if M1 is a (d,d) matrix and M2 is a (d,d matrix,
+//returns M1M2 = M1_{ij} M2_{jk}, using Einstein notation
 void matrixOnMatrixInPlace(double** M, double** Mout) {
         double** A=matrixOnMatrix(M,Mout);
         extern int d;
@@ -261,6 +286,7 @@ void matrixOnMatrixInPlace(double** M, double** Mout) {
         free(*A); free(A);
 }
 
+//copies matrix M to Mout
 void copyMatrixInPlace(double** M, double** Mout, int d) {
         for(int i=0;i<d;++i) {
                 for(int j=0;j<d;++j) {
@@ -269,6 +295,7 @@ void copyMatrixInPlace(double** M, double** Mout, int d) {
         }
 }
 
+//copies matrix to new memory
 double** copyMatrix(double** M, int d) {
         double* Ah=malloc(d*d*sizeof(*Ah));
         double** A=malloc(d*sizeof(*A));
@@ -278,6 +305,8 @@ double** copyMatrix(double** M, int d) {
         return A;
 }
 
+//build d-dimensional rotation matricies for
+//rotation of pi/2 about x,y,z axes
 double*** buildPiO2RotationMatricies(int d) {
         double* Rhh=malloc(d*d*d*sizeof(*Rhh));
         double** Rh=malloc(d*d*sizeof(*Rh));

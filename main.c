@@ -30,7 +30,7 @@ int* nZeroSvSites=NULL;
 int* nPlusSuSites=NULL;
 int* nMinusSuSites=NULL;
 int* nHydrSuSites=NULL;
-int types=2;    //hardcode for now (-1,+1); later add in 0 for (-1,0,+1)
+int types=2; //default: -,+; read in from .para
 int inshlopt=0;
 bool hydrophobicExist=false;
 int* L=NULL; 
@@ -649,7 +649,7 @@ int main(int argc, char* argv[]) {
                         assert(feq!=NULL /*malloc*/);
                         memset(feq,'\0',l+6);
 
-                        strncat(feq,prefix,strlen(prefix));   //found @ start of main()
+                        strncat(feq,prefix,strlen(prefix)); //found @ start of main()
                         if(verbose==1) fprintf(myerr,"feq after cating prefix: %s\n",feq);
                         if(outputStyleFI==false) {
                                 strncat(feq,"_swap.lammpstrj",strlen("_swap.lammpstrj"));

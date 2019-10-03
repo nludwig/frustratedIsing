@@ -1,5 +1,8 @@
 #include "forRandOrder.h"
 
+//generate uniformly psuedo-random ordered "for" loop
+//(ie. non-repeating sequence in [0,l))
+
 int* forRandOrder(int l, pcg32_random_t* rng) {
         int* order=malloc(l*sizeof(*order));
         bool* taken=malloc(l*sizeof(*taken));

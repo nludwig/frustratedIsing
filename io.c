@@ -1,10 +1,14 @@
 #include "io.h"
 
+//input and output functions
+//such as for loading .data & .para files or for
+//dumping .data, .para, .lammpstrj, or .fitrj files
+
 //******************************
 //*******       IO      ********
 //******************************
 
-// Pairs with readSetParameters() output.
+//dumps .para files out. pairs with readSetParameters() output
 void dumpParameters(para p, su s, umb u, int coreNum, FILE* f, FILE* myerr) {
         extern int N,Nsu,d,shlL,types,inshlopt;
         extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
@@ -49,8 +53,8 @@ void dumpParameters(para p, su s, umb u, int coreNum, FILE* f, FILE* myerr) {
         fflush(f);
 }
 
-//Pairs with dumpParameters() output (or can be written
-//by hand).
+//reads .para files in. pairs with dumpParameters() output
+//
 //!!REQUIRES d COMES BEFORE L,bc!!
 int* readSetParameters(para p, char**** linesByType, int coreNum, FILE* f, FILE* myerr) {
         extern int N,Nsu,d,shlL,types,inshlopt;
@@ -158,30 +162,30 @@ int* readSetParameters(para p, char**** linesByType, int coreNum, FILE* f, FILE*
 }
 
 
-// Output data file which can be read by readData()
-// to allow a simulation to be restarted with an
-// equivalent configuration.
-// Data file of format:
+//Output data file which can be read by readData()
+//to allow a simulation to be restarted with an
+//equivalent configuration.
+//Data file of format:
 //
-// Frustrated Ising data file v#.##
+//Frustrated Ising data file v#.##
 //
-// N cells
-// N_t types
-// N_s solutes
+//N cells
+//N_t types
+//N_s solutes
 //
-// d dimensions
-// e_0lo e_0hi
-// e_1lo e_1hi
-// ...
-// e_(d-1)lo e_(d-1)hi
+//d dimensions
+//e_0lo e_0hi
+//e_1lo e_1hi
+//...
+//e_(d-1)lo e_(d-1)hi
 //
-// Cells
-// i type_i e_0i e_1i ... e_(d-1)i solute_i
-// ...
+//Cells
+//i type_i e_0i e_1i ... e_(d-1)i solute_i
+//...
 //
-// Solutes
-// i surfType_i com_0i ... com_(d-1)i step_i nsites_i ninshl_i linDim_i hlw_i nMotion_i shape_i
-// ...
+//Solutes
+//i surfType_i com_0i ... com_(d-1)i step_i nsites_i ninshl_i linDim_i hlw_i nMotion_i shape_i
+//...
 void dumpData(lattice c, su s, FILE* f) {
         extern int N,types,Nsu,d;
         extern int* L;
@@ -238,11 +242,13 @@ int readData(char*** lines, FILE* f) {
         return nlines;
 }
 
+//dump unwrapped solute i center of mass
 void dumpSuCom(su s, int i, FILE* f) {
         extern int d;
         for(int e=0;e<d;++e) fprintf(f,"%f ",s[i].unwrappedCom[e]);
 }
 
+//load solutes from .data or .para file
 void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, double** unwrappedComH,          \
                  double** orientationHH, double*** orientationH, double** suRelPos, double*** suRelPosPtrs,       \
                  double** shlRelPos, double*** shlRelPosPtrs, lattice** suCurPos, lattice** shlCurPos, bool** hydrH, FILE* myerr) {
@@ -518,6 +524,7 @@ void loadSu(char** lines, int nlines, su* s, su* ts, char** sNH, double** comH, 
         free(hydrStrings);
 }
 
+//dump solutes from memory into .para or .data file
 void dumpSu(su s, FILE* f) {
         extern int Nsu,d;
         fprintf(f,"\nSolutes\n");
@@ -567,6 +574,7 @@ void dumpSu(su s, FILE* f) {
         fflush(f);
 }
 
+//dump all unwrapped solute centers of mass
 void dumpAllSuComs(su s, FILE*f) {
         extern int Nsu;
         for(int i=0;i<Nsu;++i) {
@@ -576,6 +584,7 @@ void dumpAllSuComs(su s, FILE*f) {
         fprintf(f,"\n");
 }
 
+//load umbrellas from .para file
 void loadUmbrellas(char** lines, int nlines, umb u, su s, para p, FILE* myumbout, FILE* myerr) {
         assert(strcmp(lines[0],"Umbrellas") == 0 /*wrong starting line*/);
         const int maxUnitsLett=3+1;
@@ -627,6 +636,7 @@ void loadUmbrellas(char** lines, int nlines, umb u, su s, para p, FILE* myumbout
         dumpUmbrellas(u,s,p,myerr,myerr);
 }
 
+//dump umbrellas to .para file
 void dumpUmbrellas(umb u, su s, para p, FILE* f, FILE* myerr) {
         extern int d;
         fprintf(f,"\nUmbrellas\n");
@@ -647,7 +657,7 @@ void dumpUmbrellas(umb u, su s, para p, FILE* f, FILE* myerr) {
         fflush(f);
 }
 
-//add opt for header to be NULL?
+//read lines in from file f to lines
 int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f, FILE* myerr) {
         const int lh=strlen(header);
         char* headern=NULL; //ensure header ends with '\n'
@@ -740,16 +750,16 @@ int readLines(char* header, char*** lines, char** inLines, int ninLines, FILE* f
         }
 }
 
-// Output in LAMMPS format for visualization in VMD;
-// currently allows visualization for 2D & 3D lattices.
-// Uses ctplus & ctminus because LAMMPS wants particles
-// which do not change type, ie. if particle 'm' is
-// declared as type 't', it must remain so throughout
-// the simulation. But the lattice definition for this
-// code has cells which remain at constant positions
-// with spins that change orientation. ctplus&ctminus
-// are a hack to make the output type compatible with
-// this code's interal representation of the lattice.
+//Output in LAMMPS format for visualization in VMD;
+//currently allows visualization for 2D & 3D lattices.
+//Uses ctplus & ctminus because LAMMPS wants particles
+//which do not change type, ie. if particle 'm' is
+//declared as type 't', it must remain so throughout
+//the simulation. But the lattice definition for this
+//code has cells which remain at constant positions
+//with spins that change orientation. ctplus&ctminus
+//are a hack to make the output type compatible with
+//this code's interal representation of the lattice.
 void dumpLammps(lattice c, su s, int ts, int coreNum, FILE* f, FILE* myerr) {
         extern int N,d,Nsu;
         extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites;

@@ -33,12 +33,14 @@ char** split(char* str, const char* sep, int* nwords) {
         return words;
 }
 
+//swap values of doubles *a and *b
 void swapD(double* a, double* b) {
         double t=*a;
         *a=*b;
         *b=t;
 }
 
+//free first l ptrs
 void freeAll(void** ptrs, int l) {
         for(int i=0;i<l;++i) {
                 free(ptrs[i]);
@@ -46,11 +48,13 @@ void freeAll(void** ptrs, int l) {
         }
 }
 
+//absolute value of int a
 int iabs(int a) {
         if(a>=0) return a;
         else     return -a;
 }
 
+//number of digits in num
 uint16_t ndigits(long int num) {
         if(num==0l) return 1u;
         if(num<0l)  num*=-1l;
@@ -63,18 +67,34 @@ uint16_t ndigits(long int num) {
         return ndigits;
 }
 
+//compare two ints:
+//==1 if a>b,
+//==-1 if a<b
+//==0 if a==b
 int iCmp(int* a, int* b) {
         return ( *(int*)a > *(int*)b ) - ( *(int*)a < *(int*)b );
 }
 
+//compare two lattices:
+//==1 if a>b,
+//==-1 if a<b
+//==0 if a==b
 int lattCmp(lattice* a, lattice* b) {
         return ( *(lattice*)a > *(lattice*)b ) - ( *(lattice*)a < *(lattice*)b );
 }
 
+//compare two uint32_ts:
+//==1 if a>b,
+//==-1 if a<b
+//==0 if a==b
 int uint32_tCmp(uint32_t* a, uint32_t* b) {
         return ( *(uint32_t*)a > *(uint32_t*)b ) - ( *(uint32_t*)a < *(uint32_t*)b );
 }
 
+//compare two double matriciess:
+//==1 if a>b,
+//==-1 if a<b
+//==0 if a==b
 int doubleMatrixCmp(double** a, double** b, int d) {
         for(int i=0;i<d;++i) {
                 for(int j=0;j<d;++j) {
@@ -98,6 +118,7 @@ void initPara(para p) {
         p->fftOn=0;
 }
 
+//called in main pre-thread split allocation
 void allocGlobalNSiteArrays(int** nPlusSvSites, int** nMinusSvSites, int** nZeroSvSites,
                             int** nPlusSuSites, int** nMinusSuSites, int** nHydrSuSites,
                             double** totSvPlus, double** totSvMinus, double** totSuPlus,
@@ -121,6 +142,8 @@ void allocGlobalNSiteArrays(int** nPlusSvSites, int** nMinusSvSites, int** nZero
 //***** lattice related   ******
 //******************************
 
+//setup position values corresponding to lattice sites
+//(occurs once at startup)
 int** setupPos() {
         extern int N,d;
         assert(d==3);
@@ -143,6 +166,7 @@ int** setupPos() {
         return posArray;
 }
 
+//lookup position corresponding to number n
 void getPos(int n, int* pos) {
         extern int d;
         extern int** posArr;
@@ -151,11 +175,13 @@ void getPos(int n, int* pos) {
         }
 }
 
+//lookup position corresponding to lattice site cn
 void getPosLat(lattice c, lattice cn, int* pos) {
         const int n=(int)(cn-c);
         getPos(n,pos);
 }
 
+//get number n corresponding to position pos
 int getSite(int* pos, int* L_in) {
         extern int d;
         if(L_in==NULL) {
@@ -170,15 +196,18 @@ int getSite(int* pos, int* L_in) {
         return n;
 }
 
+//get number n corresponding to position pos after wrapping
 int getWrappedSite(int* pos, int* L_in) {
         wrapIntoL(pos,L_in);
         return getSite(pos,L_in);
 }
 
+//get lattice site corresponding to position pos after wrapping
 lattice getSiteLat(lattice c, int* pos) {
         return c+getWrappedSite(pos,NULL);
 }
 
+//get NN number in direction e
 int getNN(int ind, int e, int* L_in) {
         extern int d;
         int nnpos[d];
@@ -193,6 +222,7 @@ int getNN(int ind, int e, int* L_in) {
         return nn;
 }
 
+//get wrapped NN number in direction e
 int getWrappedNN(int ind, int e, int* L_in) {
         extern int d;
         int nnpos[d];
@@ -207,10 +237,12 @@ int getWrappedNN(int ind, int e, int* L_in) {
         return nn;
 }
 
+//get wrapped NN lattice in direction e
 lattice getNNLat(lattice c, int ind, int e) {
         return c+getWrappedNN(ind,e,NULL);
 }
 
+//set numbers of site types
 void setCharge(lattice c, int coreNum) {
         extern int N;
         extern int *nPlusSvSites,*nMinusSvSites,*nZeroSvSites,*nPlusSuSites,*nMinusSuSites,*nHydrSuSites;
@@ -246,6 +278,8 @@ void setCharge(lattice c, int coreNum) {
         }
 }
 
+//compare current lattice number of site types to
+//that set by setCharge()
 double* checkCharge(lattice c, int lc, double* ret) {
         extern int N;
         if(lc==-1) lc=N;
@@ -302,6 +336,7 @@ double* checkCharge(lattice c, int lc, double* ret) {
         return ret;
 }
 
+//copy para p to new para
 para copyPara(para p) {
         para pNew=malloc(1*sizeof(*pNew));
         assert(pNew!=NULL /*malloc*/);
@@ -335,6 +370,7 @@ para copyPara(para p) {
 //*******  bc related   ********
 //******************************
 
+//nearest image convention for scalar
 double pbc(double dst, int e) {
         extern int* L;
         while(dst<-L[e]/2) dst+=L[e];
@@ -342,6 +378,7 @@ double pbc(double dst, int e) {
         return dst;
 }
 
+//nearest image convention for vector
 void minImageVect(int* pos, int* L_in) {
         if(L_in==NULL) {
                 extern int* L;
@@ -356,6 +393,7 @@ void minImageVect(int* pos, int* L_in) {
         }
 }
 
+//wrap position into lattice
 void wrapIntoL(int* pos, int* L_in) {
         if(L_in==NULL) {
                 extern int* L;
@@ -370,6 +408,7 @@ void wrapIntoL(int* pos, int* L_in) {
         }
 }
 
+//wrap position into lattice
 void wrapIntoL_double(double* pos, int* L_in) {
         if(L_in==NULL) {
                 extern int* L;
@@ -387,6 +426,7 @@ void wrapIntoL_double(double* pos, int* L_in) {
         }
 }
 
+//distance between vectors u & v
 double dist_intvect_nopbc(int* u, int* v) {
         int r=0.0;
         extern int d;
@@ -397,6 +437,7 @@ double dist_intvect_nopbc(int* u, int* v) {
         return sqrt((double)r);
 }
 
+//distance between vectors u & v with nearest image convention
 double dist_vect(double* u, double* v) {
         double r=0.0;
         extern int d;
@@ -409,6 +450,7 @@ double dist_vect(double* u, double* v) {
         return sqrt(r);
 }
 
+//distance between lattice sites at i & j with nearest image convention
 double dist_lat(int i, int j) {
         extern int d;
         int u[d];
