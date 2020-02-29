@@ -1,0 +1,128 @@
+Frustrated Ising code documentation v0
+written by Nick Ludwig (nick.b.ludwig@gmail.com)
+draft date: 190926
+
+Broad Overview
+The Frustrated Ising (FI) code is written in C, with supporting code (such as a batch launching script) written in Python3. The code uses Monte Carlo moves to time propagate a d-dimensional lattice (recent versions have not been extensively tested except for d=3). Lattice sites can be occupied by spin/charges, unoccupied (ie. local spin has valence 0), or occupied by a solute. Solutes are blocks of spins that move as a unit. The lattice is enforced charge neutral. Spins of + and - need not have the same valence, but the overall charge of the entire lattice must sum to 0 as implemented.
+
+The code is parallelized using OpenMP in two ways. First, in the computation of the Ewald sums necessary to implement the long-range portion of the Coulomb interaction between charges. Second, and somewhat trivially, a number of simulations are run simultaneously, one on each thread. This choice was made for the following reasons:
+1) To make the code interact nicely with Midway’s Slurm, which does not like many single-core jobs as much as it likes fewer, many-core jobs.
+2) To allow the efficient gathering of statistics from many simulations of a single parameter.
+3) To minimize the initialization time and memory footprint of the simulation by sharing the Ewald sums (which are computed only once at the beginning of the simulation) between threads. In an old version of the code, the memory footprint was very large: it has since been greatly reduced. However, the initialization time can still be large when the simulation box is large, which can slow the initial, test phases of a project.
+
+The code begins by initializing internal variables from command line input. Additional parameters of the simulation are input by passing the location of a parameter .para file. A template for such a file is included with the code. An optional .data file containing the configuration of the lattice (in xyz format similar to the LAMMPS .data file format) may be passed in as well. If not, the lattice is initialized semi-randomly (though guaranteed to be charge neutral).
+
+After initialization of parameters and the loading/initialization of the lattice configuration (and solute configurations, if necessary), the simulation begins according to the requested move types given via the command line. First, 0 or more swap move sweeps occur. Specifically, the following procedure is iterated: a site is chosen at random. If that site is contained within a solute, a solute move attempt occurs. Otherwise, another random site is chosen. If the two sites contain unequal spins, their positions are swapped with the standard Metropolis probability. A single swap move sweep consists of N swap move attempts, where N is the number of lattice sites.
+
+After the 0 or more swap move sweeps, 0 or more cluster moves are attempted. Cluster moves are described in detail in the 2001 paper by Grousson and Viot, and decrease the correlation time of the lattice at low temperatures. Very briefly, two clusters of opposite valence are grown, and then these clusters are swapped with some probability.
+
+Finally, cleanup occurs.
+
+
+
+Code Organization
+Functions are divided amongst a number of .c files. A brief description of their contents follows.
+
+main.c: 
+Contains global variable declarations, and other “main"-type stuff: reading in the command line, calling functions to do more complex initialization, splitting off into threads, iterating the major swap & cluster move loops, cleaning up, etc.
+
+MCIcore.c:
+Contains the “core set” of functions that make up the code. These include, for example, functions for neutralizing & checking neutrality of the lattice, and for executing swap move sweeps and cluster moves.
+
+utility.c:
+Contains a variety of utility functions.
+
+pcg_basic.c:
+Contains the psuedo-random number generator used throughout this code. Written by Melissa O’Neil. Information, publication, code, etc. can be found at http://www.pcg-random.org.
+
+energy.c:
+Contains functions for evaluating the energy of a configuration of the lattice.
+
+shapes.c:
+Contains functions important for solutes on the lattice: creation of sets of sites given certain shapes and sizes, manipulation and rotation of shapes, etc.
+
+io.c:
+Contains functions responsible for reading in and writing out data (such as reading in .data & .para files, and dumping .data, .para, .fitrj, and .lammpstrj files).
+
+switches.h:
+A number of preprocessor switches to change the behavior of the compiled code.
+
+
+Compiling the Code
+If you have a recent enough compiler, the included Makefile may be sufficient to compile the code. You may have to edit the make file to (un)comment the (im)proper compiler: options are included for both gcc and icc.
+
+
+Running the Code
+The compiled code takes a set of command line inputs. The code can be run directly or through an included Python3 code, batchMCI.py. Executing the code with the incorrect number of arguments prints a description of each argument to the command line and exits. As of this writing, executing the code without any arguments leads to the following output:
+args:
+./MCIsingFIv30 
+incorrect num. args (1 instead of 22); usage:
+./MCIsing verbose?(0/1) spoof?(0/in.lammpstrj) neutralOverallOnSoluteInsertion?(0/1) rotation?(0/1) N L0,L1,L2 sigma ewaldIn(or'none') parametersIn0,1,.. dataIn0,1,..(or'none') sweepsMult0,1,..(or0.0) +kTeff0,1,..(or0.0) enFreq dumpFreq dataFreq suComFreq umbrFreq equiSteps prodSteps rngSeed,rngSeq confDump0,1,..
+
+The arguments are described briefly here (when I write a certain parameter is suggested, I am not only suggesting it, but also indicating that I cannot guarantee proper execution if that option is not chosen):
+verbose:
+1 -> more output
+0 -> less output
+1 is suggested
+
+spoof:
+0 -> run as normal.
+in.lammpstrj -> Rather than run a simulation, instead read the file in.lammpstrj and output as if a simulation were run with those configurations but with the parameters defined in the .para file(s).
+
+neutralOverallOnSoluteInsertion:
+1 -> neutralize the lattice after solute is inserted into the lattice
+0 -> do not
+1 is suggested
+
+rotation:
+1 -> allow solute rotation upon solute move attempts
+0 -> do not
+
+N:
+Number of lattice sites. Must match with value in .para file(s).
+
+L0,L1,L2:
+Length of sides of box. Product must equal N and must match with value in .para file(s).
+
+sigma:
+Ewald summation sigma value. Must match value in .para file(s).
+
+ewaldIn:
+none
+
+parametersIn0,1,...:
+The parameter .para file(s) for each thread 0,1,...
+
+dataIn0,1,... (or‘none’):
+The optional .data file(s) containing the initial configuration for each thread 0,1,...
+
+sweepsMult0,1,... (or0.0):
+
++kTeff0,1...(or0.0):
+
+enFreq:
+Frequency with which to output energy info.
+
+dumpFreq:
+Frequency with which to dump configuration to trajectory file.
+
+dataFreq:
+Frequency with which to dump configuration to new .data file.
+
+suComFreq:
+Frequency with which to dump center of masses of solutes.
+
+umbrFreq:
+Frequency with which to dump umbrella spring extension distance.
+
+equiSteps:
+Number of swap move sweeps to run (one sweep = N swap attempts).
+
+prodSteps:
+Number of cluster moves to attempt (NOT sweeps: individual move attempts).
+
+rngSeed,rngSeq:
+Two seeds required for PCG32 psuedo-random number generator.
+
+confDump0,1,...:
+Output for trajectory dump files for each thread 0,1,... . Suffix .fitrj or .lammpstrj determines format (.fitrj custom format which has more information than .lammpstrj; can by converted to .lammpstrj using included Python3 tool changeFITrjFormat.py). The names of these files will be used as a template for other output files (such as energy, with suffix .out).
