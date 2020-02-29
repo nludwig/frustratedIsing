@@ -1,8 +1,8 @@
-Frustrated Ising code documentation v0
+#Frustrated Ising code documentation v1
 written by Nick Ludwig (nick.b.ludwig@gmail.com)
-draft date: 190926
+draft date: 200229
 
-Broad Overview
+##Broad Overview
 The Frustrated Ising (FI) code is written in C, with supporting code (such as a batch launching script) written in Python3. The code uses Monte Carlo moves to time propagate a d-dimensional lattice (recent versions have not been extensively tested except for d=3). Lattice sites can be occupied by spin/charges, unoccupied (ie. local spin has valence 0), or occupied by a solute. Solutes are blocks of spins that move as a unit. The lattice is enforced charge neutral. Spins of + and - need not have the same valence, but the overall charge of the entire lattice must sum to 0 as implemented.
 
 The code is parallelized using OpenMP in two ways. First, in the computation of the Ewald sums necessary to implement the long-range portion of the Coulomb interaction between charges. Second, and somewhat trivially, a number of simulations are run simultaneously, one on each thread. This choice was made for the following reasons:
@@ -20,7 +20,7 @@ Finally, cleanup occurs.
 
 
 
-Code Organization
+##Code Organization
 Functions are divided amongst a number of .c files. A brief description of their contents follows.
 
 main.c: 
@@ -48,11 +48,11 @@ switches.h:
 A number of preprocessor switches to change the behavior of the compiled code.
 
 
-Compiling the Code
+##Compiling the Code
 If you have a recent enough compiler, the included Makefile may be sufficient to compile the code. You may have to edit the make file to (un)comment the (im)proper compiler: options are included for both gcc and icc.
 
 
-Running the Code
+##Running the Code
 The compiled code takes a set of command line inputs. The code can be run directly or through an included Python3 code, batchMCI.py. Executing the code with the incorrect number of arguments prints a description of each argument to the command line and exits. As of this writing, executing the code without any arguments leads to the following output:
 args:
 ./MCIsingFIv30 
@@ -126,3 +126,10 @@ Two seeds required for PCG32 psuedo-random number generator.
 
 confDump0,1,...:
 Output for trajectory dump files for each thread 0,1,... . Suffix .fitrj or .lammpstrj determines format (.fitrj custom format which has more information than .lammpstrj; can by converted to .lammpstrj using included Python3 tool changeFITrjFormat.py). The names of these files will be used as a template for other output files (such as energy, with suffix .out).
+
+
+An alternative to running the code directly is to use the accompanying batchMCI.py script. On a system with the SLURM job management system, this script allows for the launching of many simulations at once with varying parameters. This script requires a template .sbatch and .para file in the cwd to work properly.
+
+##Testing
+
+An incomplete testing script is included in testMCI.py. The vision for this script was to launch a set of baseline jobs and to have a set of expected averages to which those jobs could be compared. After each update to the code, this set of tests could be run to ensure that nothing in the basic functioning of the code was broken. To be added.
